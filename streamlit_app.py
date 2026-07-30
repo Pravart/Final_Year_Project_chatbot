@@ -216,7 +216,8 @@ def authenticate_user(username: str, password: str) -> bool:
         return stored_password == entered_hash or stored_password == password
 
     except MySQLError as exc:
-        st.error(f"Database login error: {exc}")
+        st.exception(exc)
+        st.error("Database login error.")
         return False
 
     finally:
@@ -347,19 +348,23 @@ def render_sidebar() -> None:
         st.session_state.navigation = "💬 Chat"
     else:
         st.sidebar.success(f"Signed in as {st.session_state.username}")
+
         st.session_state.navigation = st.sidebar.radio(
             "Navigation",
             ["💬 Chat", "👤 Profile"],
             key="navigation_radio",
         )
     st.sidebar.markdown("### 🕒 Recent Chats")
-    if "messages" in st.session_state and len(st.session_state.messages) > 0:
-        for msg in st.session_state.messages:
-            if msg["role"] == "user":
-                preview = msg["content"][:35]
-                if len(msg["content"]) > 35:
-                    preview += "..."
-                st.sidebar.write("• " + preview)
+
+    recent_users = [
+        msg["content"][:35] + ("..." if len(msg["content"]) > 35 else "")
+        for msg in st.session_state.messages
+        if msg["role"] == "user"
+    ][-5:]
+
+    if recent_users:
+        for chat in recent_users:
+            st.sidebar.write("• " + chat)
     else:
         st.sidebar.write("No chat history yet.")
 
@@ -511,11 +516,16 @@ def render_chat_page() -> None:
         f"**🎯 Sub-emotion:** {sub_emotion}\n\n"
         f"{reply}"
     )
-
-    st.session_state.messages.append(
-        {"role": "assistant", "content": assistant_content}
-    )
-
+    # Refresh chat history from database
+    st.session_state.messages = load_history(st.session_state.username)
+    # # If latest assistant message is not yet in history, append it temporarily
+    if (
+        not st.session_state.messages or
+        st.session_state.messages[-1]["content"] != assistant_content
+    ):
+        st.session_state.messages.append(
+            {"role": "assistant", "content": assistant_content}
+        )
     st.rerun()
 
 
