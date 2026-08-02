@@ -1,19 +1,53 @@
-# Secrets
-.env
-
 # Python
 __pycache__/
-*.py[cod]
-.venv/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environment
 venv/
+.env
 
 # Jupyter
 .ipynb_checkpoints/
 
-# OS / editor
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Model Cache
+.cache/
+.huggingface/
+
+# OS Files
 .DS_Store
 Thumbs.db
-.vscode/
 
 # Logs
 *.log
+
+# Database
+*.db
+*.sqlite3
+
+# Environment Variables
+.env
+
+# Build
+build/
+dist/
+
+# Temporary
+temp/
+tmp/
+
+# Render
+.render/
+
+# MySQL dumps
+*.sql

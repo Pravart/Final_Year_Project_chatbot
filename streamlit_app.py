@@ -125,6 +125,21 @@ def update_profile(username: str, profile: dict[str, Any]) -> bool:
     except (RequestException, ValueError):
         return False
 
+def fetch_quiz_score(username: str):
+    try:
+        response = requests.get(
+            f"{API_URL}/quiz_score",
+            params={"username": username},
+            timeout=15,
+        )
+        response.raise_for_status()
+        return response.json()
+    except (RequestException, ValueError):
+        return {
+            "attempted": 0,
+            "correct": 0,
+            "accuracy": 0
+        }
 
 def register_user(
     username: str,
@@ -246,7 +261,7 @@ def render_welcome() -> None:
             use_container_width=True,
             type="primary",
         ):
-            guest_id = f"guest_{uuid.uuid4().hex[:12]}"
+            guest_id = f"guest_{uuid.uuid4().hex}"
             st.session_state.guest_id = guest_id
             st.session_state.username = guest_id
             st.session_state.is_guest = True
@@ -351,22 +366,26 @@ def render_sidebar() -> None:
 
         st.session_state.navigation = st.sidebar.radio(
             "Navigation",
-            ["💬 Chat", "👤 Profile"],
+            ["💬 Chat","📝 Quiz", "👤 Profile"],
             key="navigation_radio",
         )
     st.sidebar.markdown("### 🕒 Recent Chats")
 
     recent_users = [
-        msg["content"][:35] + ("..." if len(msg["content"]) > 35 else "")
+        msg["content"][:40] + ("..." if len(msg["content"]) > 40 else "")
         for msg in st.session_state.messages
         if msg["role"] == "user"
-    ][-5:]
+    ][-10:]
+    recent_users.reverse()
+    chat_container = st.sidebar.container(height=230)
 
-    if recent_users:
-        for chat in recent_users:
-            st.sidebar.write("• " + chat)
-    else:
-        st.sidebar.write("No chat history yet.")
+    with chat_container:
+        if recent_users:
+            for i, chat in enumerate(recent_users, 1):
+                st.markdown(f"**{i}.** {chat}")
+                st.divider()
+        else:
+            st.write("No chat history yet.")
 
     if st.sidebar.button("🧹 Clear visible chat", use_container_width=True):
         st.session_state.messages = []
@@ -379,7 +398,6 @@ def render_sidebar() -> None:
         "This chatbot provides supportive information and is not a substitute "
         "for professional diagnosis, therapy, or emergency services."
     )
-
 
 def render_profile_page() -> None:
     username = st.session_state.username
@@ -438,7 +456,7 @@ def render_profile_page() -> None:
 
 def send_chat_message(prompt: str) -> dict[str, str] | None:
     username = st.session_state.username
-    history = st.session_state.messages[-10:]
+    history = st.session_state.messages[-20:]
 
     try:
         response = requests.post(
@@ -472,6 +490,7 @@ def render_chat_page() -> None:
     st.header("💬 Supportive Chat")
     st.write("Talk freely. I'm here to listen and offer practical support.")
 
+    # Welcome message
     if not st.session_state.messages:
         with st.chat_message("assistant", avatar="🧠"):
             st.markdown(
@@ -479,54 +498,247 @@ def render_chat_page() -> None:
                 "with supportive, personalized guidance."
             )
 
+    # Show previous chat
     for message in st.session_state.messages:
         role = message.get("role", "assistant")
         avatar = "👤" if role == "user" else "🧠"
+
         with st.chat_message(role, avatar=avatar):
             st.markdown(message.get("content", ""))
 
+            if "time" in message:
+                st.caption(message["time"])
+
+    # Download button
+    chat_text = ""
+    for msg in st.session_state.messages:
+        chat_text += f'{msg["role"].upper()}: {msg["content"]}\n\n'
+
+    st.download_button(
+        "📥 Download Chat",
+        data=chat_text,
+        file_name="chat_history.txt",
+        mime="text/plain"
+    )
+
+    # User input
     prompt = st.chat_input("Type your message...")
 
     if not prompt:
         return
 
     prompt = prompt.strip()
+
     if not prompt:
         return
 
+    # Show user message immediately
     st.session_state.messages.append(
-        {"role": "user", "content": prompt}
+        {
+            "role": "user",
+            "content": prompt
+        }
     )
 
     with st.chat_message("user", avatar="👤"):
         st.markdown(prompt)
 
-    with st.spinner("Thinking..."):
+    # Backend call
+    with st.spinner("Analyzing your emotions..."):
         result = send_chat_message(prompt)
 
     if result is None:
+        st.session_state.messages.pop()
         return
 
     main_emotion = result["main_emotion"]
     sub_emotion = result["sub_emotion"]
     reply = result["reply"]
+    wellness_card = result.get("wellness_card", "")
 
-    assistant_content = (
-        f"**😊 Main emotion:** {main_emotion}\n\n"
-        f"**🎯 Sub-emotion:** {sub_emotion}\n\n"
-        f"{reply}"
-    )
-    # Refresh chat history from database
-    st.session_state.messages = load_history(st.session_state.username)
-    # # If latest assistant message is not yet in history, append it temporarily
-    if (
-        not st.session_state.messages or
-        st.session_state.messages[-1]["content"] != assistant_content
-    ):
-        st.session_state.messages.append(
-            {"role": "assistant", "content": assistant_content}
+    assistant_content = f"**😊 Main emotion:** {main_emotion}\n\n"
+
+    if sub_emotion and sub_emotion.lower() != "not available":
+        assistant_content += f"**🎯 Sub-emotion:** {sub_emotion}\n\n"
+
+    assistant_content += reply
+
+    if wellness_card:
+        assistant_content += (
+            "\n\n---\n\n"
+            "## 🌱 Personalized Wellness Card\n\n"
         )
+        assistant_content += wellness_card
+
+    # Reload full history from Flask
+    st.session_state.messages = load_history(
+        st.session_state.username
+    )
+
+    # Replace last assistant reply with formatted version
+    if (
+        st.session_state.messages
+        and st.session_state.messages[-1]["role"] == "assistant"
+    ):
+        st.session_state.messages[-1]["content"] = assistant_content
+
     st.rerun()
+
+def render_quiz_page():
+    st.header("📝 Emotion Recognition Quiz")
+
+    score = fetch_quiz_score(st.session_state.username)
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("Attempted", score["attempted"])
+
+    with col2:
+        st.metric("Correct", score["correct"])
+
+    with col3:
+        st.metric("Accuracy", f"{score['accuracy']}%")
+
+    st.divider()
+
+    # -----------------------------
+    # Reset button (always visible)
+    # -----------------------------
+    if st.button("🔄 Reset Quiz Progress"):
+
+        reset_response = requests.post(
+            f"{API_URL}/reset_quiz",
+            json={"username": st.session_state.username},
+            timeout=30
+        )
+        reset_response.raise_for_status()
+
+        if "quiz_question" in st.session_state:
+            del st.session_state.quiz_question
+
+        if "quiz_result" in st.session_state:
+            del st.session_state.quiz_result
+
+        st.session_state.quiz_submitted = False
+
+        st.rerun()
+
+    # -----------------------------
+    # Load question
+    # -----------------------------
+    if "quiz_question" not in st.session_state:
+
+        response = requests.get(
+            f"{API_URL}/quiz",
+            params={"username": st.session_state.username},
+            timeout=30
+        )
+
+        response.raise_for_status()
+        st.session_state.quiz_question = response.json()
+
+    q = st.session_state.quiz_question
+
+    # -----------------------------
+    # Quiz completed
+    # -----------------------------
+    if q.get("completed"):
+
+        st.success("🎉 Quiz Completed!")
+
+        st.write(
+            f"### Final Score: {score['correct']} / {score['attempted']}"
+        )
+
+        st.write(
+            f"### Accuracy: {score['accuracy']}%"
+        )
+        return
+
+    # -----------------------------
+    # Progress
+    # -----------------------------
+    progress = score["attempted"] + 1
+
+    st.progress(min(progress / 10, 1.0))
+
+    st.write(f"Question {progress} / 10")
+
+    st.markdown(f"### {q['scenario']}")
+
+    options = [
+        q["option1"],
+        q["option2"],
+        q["option3"],
+        q["option4"]
+    ]
+
+    selected = st.radio(
+        "Choose the correct emotion:",
+        options,
+        key="quiz_radio"
+    )
+
+    # -----------------------------
+    # Submit Answer
+    # -----------------------------
+    if "quiz_result" not in st.session_state:
+        if st.button("Submit Answer", type="primary"):
+
+            result = requests.post(
+                f"{API_URL}/quiz_answer",
+                json={
+                    "username": st.session_state.username,
+                    "id": q["id"],
+                    "selected": selected
+                },
+                timeout=30
+            )
+            if result.status_code != 200:
+                st.error("Server Error. Please try again.")
+                return
+
+            result = result.json()
+            if "error" in result:
+                st.warning(result["error"])
+
+                if result["error"] == "Question already attempted":
+                    del st.session_state.quiz_question
+                    st.rerun()
+            else:
+                st.session_state.quiz_result = result
+                st.rerun()
+
+    # -----------------------------
+    # Show Result
+    # -----------------------------
+    if "quiz_result" in st.session_state:
+
+        result = st.session_state.quiz_result
+
+        if result["correct"]:
+            st.success("✅ Correct!")
+        else:
+            st.error("❌ Incorrect")
+
+        st.info(
+            f"Correct Answer: {result['correct_answer']}"
+        )
+
+        st.markdown("### 📘 Explanation")
+
+        st.write(result["explanation"])
+
+        # -----------------------------
+        # Next Question
+        # -----------------------------
+        if st.button("➡ Next Question"):
+
+            del st.session_state.quiz_question
+            del st.session_state.quiz_result
+
+            st.rerun()
 
 
 def render_app() -> None:
@@ -538,6 +750,11 @@ def render_app() -> None:
         and st.session_state.navigation == "👤 Profile"
     ):
         render_profile_page()
+    elif (
+        not st.session_state.is_guest
+        and st.session_state.navigation == "📝 Quiz"
+    ):
+        render_quiz_page()
     else:
         render_chat_page()
 

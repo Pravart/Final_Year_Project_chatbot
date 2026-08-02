@@ -1,83 +1,249 @@
-# 🧠 Psychological Remedies Chatbot
+# 🧠 AI Powered Personalized Psychological Remedies Chatbot
 
-An AI-powered Psychological Remedies Chatbot that detects emotions, predicts sub-emotions, retrieves relevant counseling knowledge using RAG, and provides personalized responses.
+An AI-powered mental wellness chatbot that detects user emotions, predicts fine-grained sub-emotions, retrieves relevant counselling responses using Retrieval-Augmented Generation (RAG), and generates personalized psychological support using Large Language Models (LLMs).
+
+The system combines Deep Learning, Natural Language Processing (NLP), FAISS similarity search, DistilBERT emotion classification, and Groq Llama 3.3 to provide personalized emotional support.
 
 ---
 
-## Features
+# 🚀 Features
 
-- Emotion Detection (9 Main Emotions)
-- Sub Emotion Prediction (28 Sub Emotions)
-- Retrieval-Augmented Generation (RAG)
-- Personalized AI Responses
-- User Login & Signup
+## 🤖 AI Chatbot
+- AI-powered psychological support
+- Personalized responses using Groq Llama 3.3 (70B)
+- Context-aware conversations
+- Conversation history support
+
+---
+
+## 😊 Emotion Detection
+
+### Main Emotion Detection
+- DistilBERT Model
+- 9 Main Emotions
+
+```
+Happy
+Sad
+Angry
+Fear
+Neutral
+Affection
+Relief
+Curiosity
+Embarrassment
+```
+
+### Sub Emotion Detection
+
+- DistilBERT Model
+- 28 Fine-grained Emotions
+
+Examples:
+
+- joy
+- sadness
+- anger
+- disappointment
+- optimism
+- nervousness
+- gratitude
+- excitement
+- pride
+- remorse
+- caring
+- amusement
+- admiration
+- approval
+- confusion
+- realization
+- surprise
+- love
+- etc.
+
+---
+
+## 🛡 Intelligent Rule-Based Fallback
+
+When the emotion classifier confidence is low, the chatbot automatically switches to a rule-based fallback emotion detector.
+
+Benefits:
+
+- Better prediction for unseen sentences
+- Handles mixed emotions
+- Prevents incorrect high-confidence predictions
+- Improves RAG retrieval quality
+
+---
+
+## 📚 Retrieval-Augmented Generation (RAG)
+
+Instead of relying only on an LLM, the chatbot retrieves relevant counselling knowledge using:
+
+- Sentence Transformers
+- FAISS Vector Database
+- Semantic Similarity Search
+
+Top counselling responses are then passed to the LLM for personalized response generation.
+
+---
+
+## 🌱 Personalized Wellness Card
+
+Each response also generates a personalized wellness card containing:
+
+- 🌱 Focus
+- 💨 Exercise
+- 📝 Reflection
+- 🎯 Tiny Goal
+- 💬 Reminder
+
+---
+
+## 👤 User Management
+
+- Login
+- Signup
 - Guest Mode
-- Profile Management
-- Chat History Storage
-- MySQL Database Integration
-- Groq LLM Integration
-- Streamlit Frontend
-- Flask Backend
+- Profile Creation
+- Profile Update
 
 ---
 
-## Tech Stack
+## 📜 Chat History
 
-Frontend
+- Stores every conversation
+- Retrieves previous chats
+- Personalized based on user history
+
+---
+
+## 📝 Emotion Recognition Quiz
+
+- 10 Random Questions
+- Difficulty Levels
+- Rule-based Explanation System
+- Score Tracking
+- Accuracy Calculation
+- Reset Quiz Option
+
+---
+
+# 🛠 Tech Stack
+
+## Frontend
+
 - Streamlit
 
-Backend
+## Backend
+
 - Flask
 - Flask-CORS
 
-Database
+## Database
+
 - MySQL
 
-Machine Learning
-- Scikit-learn
+## Machine Learning
+
+- DistilBERT
 - Sentence Transformers
+- Scikit-learn
+- PyTorch
+
+## Vector Database
+
 - FAISS
 
-LLM
-- Groq API (Llama 3.3 70B)
+## LLM
+
+- Groq API
+- Llama 3.3 70B Versatile
+
+## Other Libraries
+
+- Pandas
+- NumPy
+- Transformers
+- dotenv
 
 ---
 
-## Project Structure
+# 📂 Project Structure
 
-```
-Final_Year_Project/
+```text
+Final_Year_Project_chatbot/
 │
 ├── app.py
 ├── streamlit_app.py
 ├── requirements.txt
+├── .gitignore
+├── README.md
 ├── .env
+│
 ├── models/
-├── dataset/
+│   ├── main_emotion_model/
+│   ├── sub_emotion_model/
+│   ├── encoders/
+│
+├── datasets/
+│   ├── counselling_dataset.csv
+│   ├── quiz_dataset.csv
+│   ├── quiz_explanations.py
+│
 ├── screenshots/
-└── README.md
+│
+└── venv/
 ```
 
 ---
 
-## Installation
+# ⚙ Installation
 
-Clone the repository
+## Clone Repository
 
 ```bash
-git clone <your-github-link>
+git clone https://github.com/<YOUR_USERNAME>/Final_Year_Project_chatbot.git
 ```
 
-Install dependencies
+---
+
+## Create Virtual Environment
+
+```bash
+python -m venv venv
+```
+
+Activate:
+
+Windows
+
+```bash
+venv\Scripts\activate
+```
+
+Linux/Mac
+
+```bash
+source venv/bin/activate
+```
+
+---
+
+## Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Create a `.env` file
+---
 
-```
-GROQ_API_KEY=YOUR_API_KEY
+# 🔐 Environment Variables
+
+Create a `.env` file.
+
+```env
+GROQ_API_KEY=YOUR_GROQ_API_KEY
 
 MYSQL_HOST=localhost
 MYSQL_USER=root
@@ -87,13 +253,19 @@ MYSQL_DATABASE=psychological_chatbot
 API_URL=http://127.0.0.1:5000
 ```
 
-Run Flask
+---
+
+# ▶ Running the Project
+
+## Start Flask Backend
 
 ```bash
 python app.py
 ```
 
-Run Streamlit
+---
+
+## Start Streamlit
 
 ```bash
 streamlit run streamlit_app.py
@@ -101,33 +273,96 @@ streamlit run streamlit_app.py
 
 ---
 
-## Screenshots
+# 📊 Model Pipeline
+
+User Input
+
+↓
+
+Main Emotion Prediction (DistilBERT)
+
+↓
+
+Confidence Check
+
+↓
+
+High Confidence
+→ Use Predicted Emotion
+
+Low Confidence
+→ Rule-Based Fallback
+
+↓
+
+Sub Emotion Prediction
+
+↓
+
+RAG Retrieval (FAISS)
+
+↓
+
+Groq Llama 3.3
+
+↓
+
+Personalized Response
+
+↓
+
+Wellness Card
+
+---
+
+# 🌍 Deployment
+
+Backend
+
+- Render
+
+Frontend
+
+- Streamlit Community Cloud
+
+---
+
+# 📷 Screenshots
 
 - Home Page
 - Login
 - Signup
-- Guest Mode
 - Chat Interface
 - Emotion Prediction
+- Wellness Card
+- Quiz Page
 - Profile Page
 - Chat History
 
 ---
 
-## Future Scope
+# 📌 Future Scope
 
 - Voice Interaction
 - Multilingual Support
-- Therapist Recommendation
 - PDF Report Generation
+- Therapist Recommendation
 - Mobile Application
-- Cloud Deployment
+- Fine-tuned Emotion Model
+- Emotion Trend Dashboard
+- Admin Analytics Panel
 
 ---
 
-## Author
+# 👨‍💻 Team Members
 
-Pravart Singh
-Adeeba Nizam
-Riya Pandey
-Aditya Shukla
+- Pravart Singh
+- Adeeba Nizam
+- Riya Pandey
+- Aditya Shukla
+
+---
+
+# 📄 License
+
+This project is developed as a Final Year B.Tech Project for academic purposes.
