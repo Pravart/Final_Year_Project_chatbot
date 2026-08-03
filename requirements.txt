@@ -24,3 +24,5 @@ groq
 huggingface_hub
 datasets
 nltk
+
+gunicorn
