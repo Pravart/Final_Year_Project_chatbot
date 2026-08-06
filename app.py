@@ -1,5 +1,7 @@
+from pydoc import text
 from re import match
 from quiz_explanations import QUIZ_EXPLANATIONS
+import numpy as np
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -17,7 +19,8 @@ import torch
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 from groq import Groq
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from transformers import AutoTokenizer
+from optimum.onnxruntime import ORTModelForSequenceClassification
 
 # ==========================================
 # Load Environment Variables
@@ -73,26 +76,27 @@ def reconnect_db():
 # Load Emotion Models
 # ==========================================
 
-main_distilbert_path = "models/distilbert_emotion"
+main_distilbert_path = "models/distilbert_emotion_onnx"
 
 main_tokenizer = AutoTokenizer.from_pretrained(main_distilbert_path)
 
-main_model = AutoModelForSequenceClassification.from_pretrained(
-    main_distilbert_path
+main_model = ORTModelForSequenceClassification.from_pretrained(
+    "models/distilbert_emotion_onnx",
+    file_name="model_int8.onnx"
 )
-
-main_model.eval()
 
 main_encoder = joblib.load("models/main_emotion_encoder.pkl")
 
-sub_distilbert_path = "models/distilbert_sub_emotion"
+sub_distilbert_path = "models/distilbert_sub_emotion_onnx"
 sub_tokenizer = AutoTokenizer.from_pretrained(sub_distilbert_path)
 
-sub_model = AutoModelForSequenceClassification.from_pretrained(
-    sub_distilbert_path
+sub_model = ORTModelForSequenceClassification.from_pretrained(
+    "models/distilbert_sub_emotion_onnx",
+    file_name="model_int8.onnx"
 )
 
-sub_model.eval()
+mental_classifier = joblib.load("models/mental_classifier.pkl")
+mental_vectorizer = joblib.load("models/mental_vectorizer.pkl")
 
 sub_encoder = joblib.load("models/sub_emotion_encoder.pkl")
 
@@ -108,24 +112,12 @@ print(f"Using device: {device}")
 # Load RAG
 # ==========================================
 
-index = faiss.read_index(
-    "models/counseling_faiss.index"
-)
+index = faiss.read_index("models/counseling_faiss.index")
+counsel_df = joblib.load("models/counseling_dataset.pkl")
 
-counsel_df = joblib.load(
-    "models/counseling_dataset.pkl"
-)
+embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L12-v2")
 
-embedding_model = SentenceTransformer(
-    "sentence-transformers/all-MiniLM-L12-v2"
-)
-
-# Build FAISS index once for the full counselling dataset
-
-all_embeddings = embedding_model.encode(
-    counsel_df["Context"].tolist(),
-    convert_to_numpy=True
-).astype("float32")
+all_embeddings = np.load("models/counselling_embeddings.npy")
 
 full_index = faiss.IndexFlatL2(all_embeddings.shape[1])
 full_index.add(all_embeddings)
@@ -239,7 +231,17 @@ def fallback_main_emotion(text):
         "lonely", "depressed", "hopeless",
         "disappointed", "upset", "loss", "lost",
         "rejected", "missed opportunity","nobody loves me",
-        "no one loves me","worthless","alone","left me","ignored"
+        "no one loves me","worthless","alone","left me","ignored","low score",
+        "low scores","low mark","low marks","poor marks","poor score","poor scores",
+        "scored low","got low","did badly","didn't get good marks",
+        "couldn't get good marks","got average marks","got low marks",
+        "I am feeling low","I feel low","I feel low today","I'm feeling down",
+        "I feel emotionally low","I'm feeling really low lately",
+        "I have been feeling low for days",
+        "I don't feel like doing anything today",
+        "My mood is very low.","uplift my mood","improve my mood","feeling down","down lately",
+        "not feeling good","feeling bad","cheer me up","how to feel better","help my mood",
+        "motivate me","need motivation","feeling empty","feeling miserable",
     ]
     if any(p in text for p in sad_patterns):
         return "Sad"
@@ -250,13 +252,14 @@ def fallback_main_emotion(text):
         "afraid", "fear", "scared",
         "panic", "anxious", "nervous",
         "worried", "stress", "stressed",
-        "tension", "terrified"
+        "tension", "terrified","tomorrow","next week",
+        "upcoming","going to","have an exam",
+        "have a test","interview","i want good marks","i hope i pass",
+        "i want to become topper","i have exam tomorrow","overthinking",
+        "overthink","future","barely sleep","can't sleep","cannot sleep",
+        "heart races","racing heart","pretending","everything is okay"
     ]
     if any(p in text for p in fear_patterns):
-        return "Fear"
-
-    # Generic exam/interview mention
-    if any(word in text for word in ["exam", "interview", "deadline", "test"]):
         return "Fear"
 
     # ---------------- ANGRY ----------------
@@ -318,7 +321,9 @@ def fallback_main_emotion(text):
         "i got internship", "i got the internship", "promotion",
         "won", "victory", "achievement", "success",
         "celebrate", "party", "excited", "happy",
-        "great news", "good news", "dream come true"
+        "great news", "good news", "dream come true","i got good marks",
+        "i scored good marks","i scored high marks","i became topper",
+        "i got distinction","i received distinction","i passed"
     ]
     if any(p in text for p in happy_patterns):
             return "Happy"
@@ -326,6 +331,222 @@ def fallback_main_emotion(text):
     # ---------------- DEFAULT ----------------
     return "Neutral"
 
+def fallback_sub_emotion(text, main_emotion):
+    text = text.lower()
+
+    # ================= FEAR =================
+    if main_emotion == "Fear":
+
+        nervousness = [
+            "exam","test","quiz","interview","viva","presentation",
+            "tomorrow","deadline","result","results","performance",
+            "job","placement","selection","competition","competition",
+            "speech","meeting","stage","public speaking","first day",
+            "worried","nervous","tense","stress","stressed","panic",
+            "anxious","anxiety","can't sleep","cannot sleep"
+        ]
+
+        fear = [
+            "afraid","fear","scared","terrified","frightened",
+            "horror","danger","unsafe","threat","accident",
+            "kidnap","robbery","earthquake","death","die",
+            "hospital","injury","attack","violence","crime"
+        ]
+
+        if any(k in text for k in nervousness):
+            return "nervousness"
+
+        if any(k in text for k in fear):
+            return "fear"
+
+        return "fear"
+
+    # ================= SAD =================
+    elif main_emotion == "Sad":
+
+        grief = [
+            "alone","lonely","nobody","no one","hopeless",
+            "worthless","empty","abandoned","left me","miss you",
+            "death","passed away","funeral","lost my father",
+            "lost my mother","lost my friend","broken family"
+        ]
+
+        disappointment = [
+            "failed","failure","didn't get","did not get",
+            "not selected","rejected","low marks","bad marks",
+            "disappointed","missed opportunity","couldn't achieve",
+            "could not achieve","unsuccessful"
+        ]
+
+        remorse = [
+            "my mistake","my fault","i regret","i am sorry",
+            "guilty","regret","shouldn't have","should not have",
+            "forgive me","i apologize"
+        ]
+
+        sadness = [
+            "sad","cry","crying","depressed","upset",
+            "hurt","pain","heartbroken","broken","feeling low"
+        ]
+
+        if any(k in text for k in grief):
+            return "grief"
+
+        if any(k in text for k in remorse):
+            return "remorse"
+
+        if any(k in text for k in disappointment):
+            return "disappointment"
+
+        if any(k in text for k in sadness):
+            return "sadness"
+
+        return "sadness"
+
+    # ================= HAPPY =================
+    elif main_emotion == "Happy":
+
+        gratitude = [
+            "thank","thanks","thank you","grateful",
+            "appreciate","blessed"
+        ]
+
+        admiration = [
+            "inspired","admire","respect","idol","role model"
+        ]
+
+        excitement = [
+            "excited","can't wait","cannot wait","looking forward",
+            "thrilled","amazing","awesome"
+        ]
+
+        joy = [
+            "happy","passed","cracked","selected","won",
+            "success","promotion","celebrate","party",
+            "achievement","good news"
+        ]
+
+        if any(k in text for k in gratitude):
+            return "gratitude"
+
+        if any(k in text for k in admiration):
+            return "admiration"
+
+        if any(k in text for k in excitement):
+            return "excitement"
+
+        if any(k in text for k in joy):
+            return "joy"
+
+        return "joy"
+
+    # ================= ANGRY =================
+    elif main_emotion == "Angry":
+
+        annoyance = [
+            "annoy","annoyed","irritated","disturbed",
+            "bothered","frustrated","fed up"
+        ]
+
+        anger = [
+            "angry","mad","furious","rage","hate",
+            "shouting","yelling","temper"
+        ]
+
+        disgust = [
+            "disgust","gross","dirty","filthy","nasty"
+        ]
+
+        disapproval = [
+            "wrong","unfair","cheated","betrayed",
+            "lied","lie","fake","corrupt","stolen",
+            "my wallet","took my wallet"
+        ]
+
+        if any(k in text for k in anger):
+            return "anger"
+
+        if any(k in text for k in annoyance):
+            return "annoyance"
+
+        if any(k in text for k in disgust):
+            return "disgust"
+
+        if any(k in text for k in disapproval):
+            return "disapproval"
+
+        return "anger"
+
+    # ================= AFFECTION =================
+    elif main_emotion == "Affection":
+
+        love = [
+            "love","beloved","girlfriend","boyfriend",
+            "wife","husband","romantic","kiss","hug",
+            "care","caring","miss you","adore"
+        ]
+
+        caring = [
+            "family","friend","support","help","protect",
+            "kind","kindness","comfort","take care"
+        ]
+
+        if any(k in text for k in love):
+            return "love"
+
+        if any(k in text for k in caring):
+            return "caring"
+
+        return "love"
+
+    # ================= RELIEF =================
+    elif main_emotion == "Relief":
+
+        if any(k in text for k in [
+            "finally","relief","relieved","safe",
+            "escaped","problem solved","finished",
+            "it's over","its over","completed",
+            "recovered","thank god","thank goodness"
+        ]):
+            return "relief"
+
+        return "relief"
+
+    # ================= CURIOSITY =================
+    elif main_emotion == "Curiosity":
+
+        if any(k in text for k in [
+            "curious","wonder","interested",
+            "discover","explore","learn",
+            "why","how","what if",
+            "explain","tell me","can you",
+            "question","research"
+        ]):
+            return "curiosity"
+
+        return "curiosity"
+
+    # ================= EMBARRASSMENT =================
+    elif main_emotion == "Embarrassment":
+
+        if any(k in text for k in [
+            "embarrassed","awkward","ashamed",
+            "humiliated","blushed",
+            "everyone laughed","made fun",
+            "publicly embarrassed"
+        ]):
+            return "embarrassment"
+        return "embarrassment"
+    
+    return "neutral"
+
+COUNSELLING_EMBEDDINGS = embedding_model.encode(
+    counsel_df["Context"].tolist(),
+    convert_to_numpy=True
+).astype("float32")
+
+COUNSELLING_INDEX = faiss.IndexFlatL2(COUNSELLING_EMBEDDINGS.shape[1])
+COUNSELLING_INDEX.add(COUNSELLING_EMBEDDINGS)
 
 def generate_wellness_card(main_emotion, sub_emotion):
 
@@ -368,6 +589,39 @@ Keep it under 120 words.
     )
 
     return response.choices[0].message.content
+
+def is_mental_health_query(text):
+    X = mental_vectorizer.transform([text])
+    pred = mental_classifier.predict(X)[0]
+    return pred == 1
+
+def secondary_mental_check(text):
+    text = text.lower()
+
+    emotion_words = [
+        "happy","sad","fear","angry","anxious","anxiety",
+        "stress","stressed","depressed","lonely","hopeless",
+        "motivation","motivated","confidence","confident",
+        "worried","panic","upset","cry","crying",
+        "overthinking","overthink","jealous","guilty",
+        "empty","worthless","tired","exhausted",
+        "mood","uplift","sleepy","tension","tense",
+        "mental","psychological","emotion","feeling"
+    ]
+
+    life_events = [
+        "exam","college","school","study","marks",
+        "result","failed","failure","pass",
+        "job","work","office","career",
+        "family","friend","relationship",
+        "breakup","parents","salary",
+        "interview"
+    ]
+
+    has_emotion = any(word in text for word in emotion_words)
+    has_event = any(word in text for word in life_events)
+
+    return has_emotion or (has_emotion and has_event)
 
 # ==========================================
 # AI Response Function
@@ -437,7 +691,7 @@ def get_ai_response(username, user_text, history):
     main_confidence = probs[0][main_pred].item()
     main_emotion = main_encoder.inverse_transform([main_pred])[0]
     
-    if main_confidence < 0.60:
+    if main_confidence < 0.45:
         print(
             f"Low confidence ({main_confidence:.2f}) "
             f"→ Using fallback instead of {main_emotion}"
@@ -461,19 +715,26 @@ def get_ai_response(username, user_text, history):
 
     with torch.no_grad():
         sub_outputs = sub_model(**sub_inputs)
-        sub_pred = torch.argmax(sub_outputs.logits, dim=1).item()
+    sub_probs = torch.softmax(sub_outputs.logits, dim=1)
+    sub_pred = torch.argmax(sub_probs, dim=1).item()
+    sub_confidence = sub_probs[0][sub_pred].item()
+
     sub_emotion = sub_encoder.inverse_transform([sub_pred])[0]
+
+    if sub_confidence < 0.45:
+        print(f"Low confidence ({sub_confidence:.2f}) → Using sub fallback")
+        sub_emotion = fallback_sub_emotion(user_text, main_emotion)
 
     del main_inputs, main_outputs
     del sub_inputs, sub_outputs
-    
+
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
     # RAG Retrieval
 
     # Use emotion filter only if prediction is confident
-    if main_confidence >= 0.60:
+    if main_confidence >= 0.45:
         filtered_df = counsel_df[
             counsel_df["Main_Emotion"].str.lower()
             == main_emotion.lower()
@@ -491,15 +752,7 @@ def get_ai_response(username, user_text, history):
         convert_to_numpy=True
         ).astype("float32")
     
-    temp_embeddings = embedding_model.encode(
-        search_df["Context"].tolist(),
-        convert_to_numpy=True
-        ).astype("float32")
-    
-    temp_index = faiss.IndexFlatL2(temp_embeddings.shape[1])
-    temp_index.add(temp_embeddings)
-
-    distances, indices = temp_index.search(query_embedding, 5)
+    distances, indices = COUNSELLING_INDEX.search(query_embedding, 5)
 
     best_responses = retrieve_best_counselling(search_df,indices)
     
@@ -544,8 +797,14 @@ Previous Recurring Emotion:
 Conversation History:
 {conversation}
 
-Detected Main Emotion:
+Detected Main Emotion (prediction only):
 {main_emotion}
+
+Important:
+If the user's words indicate physical tiredness, sleepiness, 
+overwork, lack of energy, or exhaustion, 
+respond mainly as physical fatigue rather than 
+sadness or depression unless the user clearly expresses emotional suffering.
 
 Detected Sub Emotion:
 {sub_emotion}
@@ -571,16 +830,13 @@ Instructions:
 8. If the user has a stored goal, relate the counselling to that goal whenever appropriate.
 9. If the recurring emotion is the same as the current emotion, gently acknowledge that this feeling has appeared before.
 10. Encourage gradual progress instead of giving generic advice.
-11. Keep the response between 100 and 150 words.
+11. Keep the response between 120 and 160 words.
 12. End with one small practical action the user can take today.
 """
-
     try:
 
         response = client.chat.completions.create(
-
             model="llama-3.3-70b-versatile",
-
             messages=[
                 {
                     "role": "system",
@@ -597,7 +853,6 @@ Instructions:
             main_emotion,
             sub_emotion
         )
-
         return main_emotion, sub_emotion, reply, wellness_card 
 
     except Exception:
@@ -626,39 +881,57 @@ def home():
 def history():
 
     reconnect_db()
-
     username = request.args.get("username")
 
     cursor.execute("""
-        SELECT
-            user_message,
-            ai_reply,
-            created_at
-        FROM chat_history
-        WHERE username=%s
-        ORDER BY id ASC
+    SELECT user_message, ai_reply, main_emotion, sub_emotion, created_at
+    FROM (
+    SELECT user_message, ai_reply, main_emotion, sub_emotion, created_at
+    FROM chat_history
+    WHERE username=%s
+    ORDER BY id DESC
+    LIMIT 10
+    ) t
+    ORDER BY created_at ASC
     """, (username,))
 
     rows = cursor.fetchall()
-
     messages = []
 
-    for user_msg, ai_msg, created_at in rows:
-
+    for user_msg, ai_msg, main_emotion, sub_emotion, created_at in rows:
         messages.append({
             "role": "user",
             "content": user_msg,
             "time": str(created_at)
         })
-
         messages.append({
             "role": "assistant",
             "content": ai_msg,
+            "main_emotion": main_emotion,
+            "sub_emotion": sub_emotion,
             "time": str(created_at)
         })
 
     return jsonify(messages)
 
+@app.route("/delete_chat", methods=["POST"])
+def delete_chat():
+    reconnect_db()
+
+    data = request.get_json()
+    username = data["username"]
+    user_message = data["user_message"]
+
+    cursor.execute("""
+        DELETE FROM chat_history
+        WHERE username=%s
+        AND user_message=%s
+        LIMIT 1
+    """, (username, user_message))
+
+    db.commit()
+
+    return jsonify({"status": "success"})
 
 # ==========================================
 # PROFILE
@@ -908,7 +1181,6 @@ def quiz_score():
 
 @app.route("/chat", methods=["POST"])
 def chat():
-
     reconnect_db()
 
     data = request.get_json()
@@ -922,6 +1194,18 @@ def chat():
 
     if user_message == "":
         return jsonify({"reply": "Please enter a message."})
+
+    if (not is_mental_health_query(user_message) and not secondary_mental_check(user_message)):
+        return jsonify({
+            "main_emotion": "Not Applicable",
+            "sub_emotion": "Not Applicable",
+            "reply": (
+            "I'm designed to help with mental health, emotions, stress, anxiety, "
+            "depression, motivation, and psychological wellbeing. "
+            "Please ask a question related to emotional or mental wellbeing."
+            ),
+            "wellness_card": ""
+        })
 
     main_emotion, sub_emotion, reply, wellness_card = get_ai_response(
         username,

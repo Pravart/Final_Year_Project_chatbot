@@ -1,96 +1,138 @@
-# 🧠 AI Powered Personalized Psychological Remedies Chatbot
+# 🧠 AI-Powered Personalized Psychological Remedies Chatbot
 
 An AI-powered mental wellness chatbot that detects user emotions, predicts fine-grained sub-emotions, retrieves relevant counselling responses using Retrieval-Augmented Generation (RAG), and generates personalized psychological support using Large Language Models (LLMs).
 
-The system combines Deep Learning, Natural Language Processing (NLP), FAISS similarity search, DistilBERT emotion classification, and Groq Llama 3.3 to provide personalized emotional support.
+The chatbot combines Deep Learning, Natural Language Processing (NLP), Semantic Search, FAISS, DistilBERT, ONNX optimization, Machine Learning classification, and Groq Llama 3.3 to provide intelligent and personalized emotional support.
 
 ---
 
 # 🚀 Features
 
-## 🤖 AI Chatbot
-- AI-powered psychological support
-- Personalized responses using Groq Llama 3.3 (70B)
+## 🤖 AI Psychological Chatbot
+
+- AI-powered psychological counselling
 - Context-aware conversations
-- Conversation history support
+- Personalized emotional support
+- Groq Llama 3.3 (70B Versatile)
+- Conversation memory
 
 ---
 
-## 😊 Emotion Detection
+## 🧠 Mental Health Query Detection
 
-### Main Emotion Detection
-- DistilBERT Model
-- 9 Main Emotions
+Before emotion prediction, every user query is classified as:
 
-```
-Happy
-Sad
-Angry
-Fear
-Neutral
-Affection
-Relief
-Curiosity
-Embarrassment
-```
+- ✅ Mental Health Query
+- ❌ Non Mental Health Query
 
-### Sub Emotion Detection
+The chatbot uses:
 
-- DistilBERT Model
-- 28 Fine-grained Emotions
+- Machine Learning classifier
+- TF-IDF Vectorizer
+- Secondary Rule-Based Verification
 
-Examples:
+Non-mental queries never enter the emotion prediction pipeline and directly receive:
 
-- joy
-- sadness
-- anger
-- disappointment
-- optimism
-- nervousness
-- gratitude
-- excitement
-- pride
-- remorse
-- caring
-- amusement
-- admiration
-- approval
-- confusion
-- realization
-- surprise
-- love
-- etc.
+- Main Emotion → Not Applicable
+- Sub Emotion → Not Applicable
 
 ---
 
-## 🛡 Intelligent Rule-Based Fallback
+# 😊 Emotion Detection
 
-When the emotion classifier confidence is low, the chatbot automatically switches to a rule-based fallback emotion detector.
+## Main Emotion Detection
+
+DistilBERT ONNX Model
+
+Main emotions:
+
+- Happy
+- Sad
+- Angry
+- Fear
+- Neutral
+- Affection
+- Relief
+- Curiosity
+- Embarrassment
+
+---
+
+## Sub Emotion Detection
+
+DistilBERT ONNX Model
+
+Fine-grained emotions include:
+
+- Joy
+- Sadness
+- Anger
+- Nervousness
+- Optimism
+- Gratitude
+- Pride
+- Remorse
+- Surprise
+- Disappointment
+- Caring
+- Excitement
+- Admiration
+- Approval
+- Curiosity
+- Fear
+- Love
+- and more...
+
+---
+
+## 🎯 Confidence-Based Prediction
+
+The chatbot automatically checks prediction confidence.
+
+If confidence is high:
+
+- Uses DistilBERT prediction
+
+If confidence is low:
+
+- Uses intelligent rule-based emotion fallback
+
+This improves robustness on unseen user inputs.
+
+---
+
+# ⚡ ONNX Optimized Models
+
+The DistilBERT models are converted to ONNX INT8.
 
 Benefits:
 
-- Better prediction for unseen sentences
-- Handles mixed emotions
-- Prevents incorrect high-confidence predictions
-- Improves RAG retrieval quality
+- Faster inference
+- Lower memory usage
+- CPU optimized
+- Reduced startup time
 
 ---
 
-## 📚 Retrieval-Augmented Generation (RAG)
+# 📚 Retrieval-Augmented Generation (RAG)
 
-Instead of relying only on an LLM, the chatbot retrieves relevant counselling knowledge using:
+The chatbot retrieves counselling knowledge before generating responses.
+
+Pipeline:
 
 - Sentence Transformers
 - FAISS Vector Database
 - Semantic Similarity Search
+- Top counselling retrieval
+- Groq Llama 3.3 enhancement
 
-Top counselling responses are then passed to the LLM for personalized response generation.
+This prevents hallucination and makes responses grounded in counselling knowledge.
 
 ---
 
-## 🌱 Personalized Wellness Card
+# 🌱 Personalized Wellness Card
 
-Each response also generates a personalized wellness card containing:
+Each counselling response also generates a personalized wellness card containing:
 
 - 🌱 Focus
 - 💨 Exercise
@@ -100,32 +142,48 @@ Each response also generates a personalized wellness card containing:
 
 ---
 
-## 👤 User Management
+# 👤 Personalized User Profile
 
-- Login
-- Signup
-- Guest Mode
-- Profile Creation
-- Profile Update
+The chatbot personalizes responses using:
 
----
+- Name
+- Age
+- Gender
+- Occupation
+- Goal
+- Previous recurring emotion
 
-## 📜 Chat History
-
-- Stores every conversation
-- Retrieves previous chats
-- Personalized based on user history
+This allows emotionally personalized conversations.
 
 ---
 
-## 📝 Emotion Recognition Quiz
+# 📜 Chat History
+
+The chatbot stores:
+
+- User messages
+- AI replies
+- Main emotion
+- Sub emotion
+- Timestamp
+
+Features:
+
+- Refresh-safe history
+- Download chat
+- Delete individual chats
+- Stored securely in MySQL
+
+---
+
+# 📝 Emotion Recognition Quiz
 
 - 10 Random Questions
 - Difficulty Levels
-- Rule-based Explanation System
+- Rule-Based Explanation
 - Score Tracking
 - Accuracy Calculation
-- Reset Quiz Option
+- Reset Quiz
 
 ---
 
@@ -138,18 +196,27 @@ Each response also generates a personalized wellness card containing:
 ## Backend
 
 - Flask
-- Flask-CORS
 
 ## Database
 
 - MySQL
 
-## Machine Learning
+## Deep Learning
 
 - DistilBERT
-- Sentence Transformers
-- Scikit-learn
+- ONNX Runtime
 - PyTorch
+
+## NLP
+
+- Transformers
+- Sentence Transformers
+
+## Machine Learning
+
+- Scikit-Learn
+- TF-IDF
+- Logistic Regression
 
 ## Vector Database
 
@@ -162,34 +229,39 @@ Each response also generates a personalized wellness card containing:
 
 ## Other Libraries
 
-- Pandas
 - NumPy
-- Transformers
-- dotenv
+- Pandas
+- SQLAlchemy
+- NLTK
+- Joblib
 
 ---
 
 # 📂 Project Structure
 
 ```text
-Final_Year_Project_chatbot/
+Final_Year_Project_Chatbot/
 │
 ├── app.py
 ├── streamlit_app.py
 ├── requirements.txt
-├── .gitignore
 ├── README.md
+├── .gitignore
 ├── .env
 │
 ├── models/
-│   ├── main_emotion_model/
-│   ├── sub_emotion_model/
-│   ├── encoders/
+│   ├── distilbert_emotion_onnx/
+│   ├── distilbert_sub_emotion_onnx/
+│   ├── counselling_faiss.index
+│   ├── counselling_embeddings.npy
+│   ├── mental_classifier.pkl
+│   ├── mental_vectorizer.pkl
+│   ├── main_emotion_encoder.pkl
+│   ├── sub_emotion_encoder.pkl
 │
 ├── datasets/
 │   ├── counselling_dataset.csv
 │   ├── quiz_dataset.csv
-│   ├── quiz_explanations.py
 │
 ├── screenshots/
 │
@@ -203,7 +275,7 @@ Final_Year_Project_chatbot/
 ## Clone Repository
 
 ```bash
-git clone https://github.com/<YOUR_USERNAME>/Final_Year_Project_chatbot.git
+git clone https://github.com/<YOUR_USERNAME>/Final_Year_Project_Chatbot.git
 ```
 
 ---
@@ -214,15 +286,13 @@ git clone https://github.com/<YOUR_USERNAME>/Final_Year_Project_chatbot.git
 python -m venv venv
 ```
 
-Activate:
-
 Windows
 
 ```bash
 venv\Scripts\activate
 ```
 
-Linux/Mac
+Linux / Mac
 
 ```bash
 source venv/bin/activate
@@ -257,7 +327,7 @@ API_URL=http://127.0.0.1:5000
 
 # ▶ Running the Project
 
-## Start Flask Backend
+## Start Backend
 
 ```bash
 python app.py
@@ -265,7 +335,7 @@ python app.py
 
 ---
 
-## Start Streamlit
+## Start Frontend
 
 ```bash
 streamlit run streamlit_app.py
@@ -273,55 +343,64 @@ streamlit run streamlit_app.py
 
 ---
 
-# 📊 Model Pipeline
+# 🧠 Model Pipeline
 
-User Input
+```text
+                User Input
+                     │
+                     ▼
+       Mental Health Classification
+          │                    │
+          │                    │
+          ▼                    ▼
+Non Mental Health        Mental Health
+          │                    │
+          ▼                    ▼
+Return Not Applicable   Main Emotion (DistilBERT)
+                               │
+                               ▼
+                    Confidence Verification
+                               │
+             ┌─────────────────┴────────────────┐
+             ▼                                  ▼
+      High Confidence                  Rule-Based Fallback
+                               │
+                               ▼
+                  Sub Emotion Prediction
+                               │
+                               ▼
+                FAISS Semantic Retrieval
+                               │
+                               ▼
+                  Groq Llama 3.3 (70B)
+                               │
+                               ▼
+          Personalized Psychological Reply
+                               │
+                               ▼
+             Personalized Wellness Card
+```
 
-↓
+---
 
-Main Emotion Prediction (DistilBERT)
+# ⚡ Performance
 
-↓
-
-Confidence Check
-
-↓
-
-High Confidence
-→ Use Predicted Emotion
-
-Low Confidence
-→ Rule-Based Fallback
-
-↓
-
-Sub Emotion Prediction
-
-↓
-
-RAG Retrieval (FAISS)
-
-↓
-
-Groq Llama 3.3
-
-↓
-
-Personalized Response
-
-↓
-
-Wellness Card
+- DistilBERT ONNX INT8 Optimization
+- Precomputed FAISS Embeddings
+- CPU Optimized Inference
+- Faster Semantic Search
+- Reduced Startup Time
+- Confidence-Based Emotion Prediction
 
 ---
 
 # 🌍 Deployment
 
-Backend
+## Backend
 
 - Render
 
-Frontend
+## Frontend
 
 - Streamlit Community Cloud
 
@@ -335,22 +414,21 @@ Frontend
 - Chat Interface
 - Emotion Prediction
 - Wellness Card
-- Quiz Page
 - Profile Page
+- Quiz Page
 - Chat History
 
 ---
 
-# 📌 Future Scope
+# 🔮 Future Scope
 
-- Voice Interaction
+- Voice-Based Counselling
 - Multilingual Support
-- PDF Report Generation
-- Therapist Recommendation
-- Mobile Application
-- Fine-tuned Emotion Model
+- Therapist Appointment Integration
 - Emotion Trend Dashboard
-- Admin Analytics Panel
+- Mobile Application
+- PDF Counselling Report
+- Admin Analytics Dashboard
 
 ---
 
@@ -365,4 +443,4 @@ Frontend
 
 # 📄 License
 
-This project is developed as a Final Year B.Tech Project for academic purposes.
+This project is developed as a Final Year B.Tech Project for academic and research purposes only.

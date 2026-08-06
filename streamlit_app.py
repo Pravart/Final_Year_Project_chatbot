@@ -9,7 +9,16 @@ import streamlit as st
 from dotenv import load_dotenv
 from mysql.connector import Error as MySQLError
 from requests import RequestException
+from datetime import datetime
 
+# ---------------- Page Config (MUST be first Streamlit command) ----------------
+st.set_page_config(
+    page_title="Psychological Remedies Chatbot",
+    page_icon="🧠",
+    layout="wide",
+)
+
+# ---------------- Load Environment ----------------
 load_dotenv()
 
 API_URL = os.getenv("API_URL", "http://127.0.0.1:5000").rstrip("/")
@@ -21,13 +30,6 @@ MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
 MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "psychological_chatbot")
 
 GENDER_OPTIONS = ["Male", "Female", "Other"]
-
-st.set_page_config(
-    page_title="Psychological Remedies Chatbot",
-    page_icon="🧠",
-    layout="wide",
-)
-
 
 def hash_password(password: str) -> str:
     """Return a SHA-256 hash so raw passwords are not stored in MySQL."""
@@ -85,6 +87,15 @@ def load_history(username: str) -> list[dict[str, str]]:
         st.warning("Previous chat history could not be loaded.")
         return []
 
+def delete_chat(username, user_message):
+    requests.post(
+        f"{API_URL}/delete_chat",
+        json={
+            "username": username,
+            "user_message": user_message
+        },
+        timeout=10
+    )
 
 def fetch_profile(username: str) -> dict[str, Any]:
     try:
@@ -268,6 +279,8 @@ def render_welcome() -> None:
             st.session_state.authenticated = True
             st.session_state.messages = []
             st.session_state.screen = "app"
+
+            st.query_params["guest"] = guest_id
             st.rerun()
 
     with login_col:
@@ -304,6 +317,8 @@ def render_login() -> None:
             st.session_state.is_guest = False
             st.session_state.messages = load_history(username.strip())
             st.session_state.screen = "app"
+
+            st.query_params["user"] = username.strip()
             st.rerun()
         else:
             st.error("Invalid username or password.")
@@ -369,6 +384,10 @@ def render_sidebar() -> None:
             ["💬 Chat","📝 Quiz", "👤 Profile"],
             key="navigation_radio",
         )
+
+        if not st.session_state.is_guest:
+            st.query_params["page"] = st.session_state.navigation
+
     st.sidebar.markdown("### 🕒 Recent Chats")
 
     recent_users = [
@@ -392,6 +411,7 @@ def render_sidebar() -> None:
         st.rerun()
 
     if st.sidebar.button("🚪 Logout", use_container_width=True):
+        st.query_params.clear()
         reset_session()
 
     st.sidebar.caption(
@@ -485,10 +505,12 @@ def send_chat_message(prompt: str) -> dict[str, str] | None:
 
     return None
 
-
 def render_chat_page() -> None:
     st.header("💬 Supportive Chat")
     st.write("Talk freely. I'm here to listen and offer practical support.")
+
+    if "messages" not in st.session_state:
+        st.session_state.messages = load_history(st.session_state.username)
 
     # Welcome message
     if not st.session_state.messages:
@@ -499,12 +521,28 @@ def render_chat_page() -> None:
             )
 
     # Show previous chat
-    for message in st.session_state.messages:
+    for i, message in enumerate(st.session_state.messages):
         role = message.get("role", "assistant")
         avatar = "👤" if role == "user" else "🧠"
 
         with st.chat_message(role, avatar=avatar):
+            if role == "assistant":
+                if message.get("main_emotion"):
+                    st.markdown(f"**😊 Main emotion:** {message['main_emotion']}")
+                if message.get("sub_emotion"):
+                    st.markdown(f"**🎯 Sub-emotion:** {message['sub_emotion']}")
             st.markdown(message.get("content", ""))
+
+            if message["role"] == "user":
+                if st.button("🗑 Delete Chat", key=f"delete_{i}"):
+                    delete_chat(
+                        st.session_state.username,
+                        message["content"]
+                    )
+                    st.session_state.messages = load_history(
+                        st.session_state.username
+                    )
+                    st.rerun()
 
             if "time" in message:
                 st.caption(message["time"])
@@ -532,14 +570,6 @@ def render_chat_page() -> None:
     if not prompt:
         return
 
-    # Show user message immediately
-    st.session_state.messages.append(
-        {
-            "role": "user",
-            "content": prompt
-        }
-    )
-
     with st.chat_message("user", avatar="👤"):
         st.markdown(prompt)
 
@@ -547,21 +577,12 @@ def render_chat_page() -> None:
     with st.spinner("Analyzing your emotions..."):
         result = send_chat_message(prompt)
 
-    if result is None:
-        st.session_state.messages.pop()
-        return
-
     main_emotion = result["main_emotion"]
     sub_emotion = result["sub_emotion"]
     reply = result["reply"]
     wellness_card = result.get("wellness_card", "")
 
-    assistant_content = f"**😊 Main emotion:** {main_emotion}\n\n"
-
-    if sub_emotion and sub_emotion.lower() != "not available":
-        assistant_content += f"**🎯 Sub-emotion:** {sub_emotion}\n\n"
-
-    assistant_content += reply
+    assistant_content = reply
 
     if wellness_card:
         assistant_content += (
@@ -570,18 +591,19 @@ def render_chat_page() -> None:
         )
         assistant_content += wellness_card
 
-    # Reload full history from Flask
-    st.session_state.messages = load_history(
-        st.session_state.username
-    )
-
-    # Replace last assistant reply with formatted version
-    if (
-        st.session_state.messages
-        and st.session_state.messages[-1]["role"] == "assistant"
-    ):
-        st.session_state.messages[-1]["content"] = assistant_content
-
+    current_time = datetime.now().strftime("%d %b %Y, %I:%M %p")
+    st.session_state.messages.append({
+        "role": "user",
+        "content": prompt,
+        "time": current_time
+    })
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": assistant_content,
+        "main_emotion": main_emotion,
+        "sub_emotion": sub_emotion,
+        "time": current_time
+    })
     st.rerun()
 
 def render_quiz_page():
@@ -714,7 +736,6 @@ def render_quiz_page():
     # Show Result
     # -----------------------------
     if "quiz_result" in st.session_state:
-
         result = st.session_state.quiz_result
 
         if result["correct"]:
@@ -727,7 +748,6 @@ def render_quiz_page():
         )
 
         st.markdown("### 📘 Explanation")
-
         st.write(result["explanation"])
 
         # -----------------------------
@@ -758,9 +778,46 @@ def render_app() -> None:
     else:
         render_chat_page()
 
+# -----------------------------
+# Initialize Session
+# -----------------------------
 init_state()
 
+# -----------------------------
+# Restore session after refresh
+# -----------------------------
+params = st.query_params
 if not st.session_state.authenticated:
+
+    if "user" in params:
+        username = params["user"]
+
+        st.session_state.username = username
+        st.session_state.authenticated = True
+        st.session_state.is_guest = False
+        st.session_state.messages = load_history(username)
+        st.session_state.screen = "app"
+
+        if params.get("page") in ["💬 Chat", "📝 Quiz", "👤 Profile"]:
+            st.session_state.navigation = params["page"]
+        else:
+            st.session_state.navigation = "💬 Chat"
+
+    elif "guest" in params:
+        guest = params["guest"]
+
+        st.session_state.username = guest
+        st.session_state.guest_id = guest
+        st.session_state.authenticated = True
+        st.session_state.is_guest = True
+        st.session_state.screen = "app"
+        st.session_state.messages = []
+
+# -----------------------------
+# Routing
+# -----------------------------
+if not st.session_state.authenticated:
+
     if st.session_state.screen == "login":
         render_login()
     elif st.session_state.screen == "signup":
