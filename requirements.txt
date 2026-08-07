@@ -16,6 +16,8 @@ SQLAlchemy
 joblib
 nltk
 requests
+groq
+
 huggingface_hub
 tokenizers
 safetensors
