@@ -32,3 +32,4 @@ MarkupSafe
 blinker
 gunicorn==23.0.0
 Flask-CORS==6.0.2
+mysql-connector-python
