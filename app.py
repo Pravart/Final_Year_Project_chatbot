@@ -107,22 +107,17 @@ sub_model.to(device)
 
 print(f"Using device: {device}")
 
-
 # ==========================================
 # Load RAG
 # ==========================================
 
-index = faiss.read_index("models/counseling_faiss.index")
 counsel_df = joblib.load("models/counseling_dataset.pkl")
-
 embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L12-v2")
 
-all_embeddings = np.load("models/counselling_embeddings.npy")
+# Load the already-created FAISS index
+COUNSELLING_INDEX = faiss.read_index("models/counseling_faiss.index")
 
-full_index = faiss.IndexFlatL2(all_embeddings.shape[1])
-full_index.add(all_embeddings)
-
-print("✅ All models loaded successfully.")
+print("✅ RAG model and FAISS index loaded successfully.")
 
 quiz_df = pd.read_csv(
     "datasets/emotion_mcq_dataset.csv",
@@ -539,14 +534,6 @@ def fallback_sub_emotion(text, main_emotion):
         return "embarrassment"
     
     return "neutral"
-
-COUNSELLING_EMBEDDINGS = embedding_model.encode(
-    counsel_df["Context"].tolist(),
-    convert_to_numpy=True
-).astype("float32")
-
-COUNSELLING_INDEX = faiss.IndexFlatL2(COUNSELLING_EMBEDDINGS.shape[1])
-COUNSELLING_INDEX.add(COUNSELLING_EMBEDDINGS)
 
 def generate_wellness_card(main_emotion, sub_emotion):
 
