@@ -394,7 +394,7 @@ def render_sidebar() -> None:
         msg["content"][:40] + ("..." if len(msg["content"]) > 40 else "")
         for msg in st.session_state.messages
         if msg["role"] == "user"
-    ][-10:]
+    ][-20:]
     recent_users.reverse()
     chat_container = st.sidebar.container(height=230)
 
@@ -521,7 +521,7 @@ def render_chat_page() -> None:
             )
 
     # Show previous chat
-    for i, message in enumerate(st.session_state.messages):
+    for i, message in enumerate(st.session_state.messages[-40:]):
         role = message.get("role", "assistant")
         avatar = "👤" if role == "user" else "🧠"
 

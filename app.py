@@ -694,13 +694,14 @@ def get_ai_response(username, user_text, history):
     if main_confidence < 0.45:
         print(
             f"Low confidence ({main_confidence:.2f}) "
-            f"→ Using fallback instead of {main_emotion}"
+            f"→ Model predicted: {main_emotion} "
+            f"→ Using fallback"
         )
         main_emotion = fallback_main_emotion(user_text)
     else:
         print(
             f"High confidence ({main_confidence:.2f}) "
-            f"→ Using model prediction: {main_emotion}"
+            f"→ Model predicted: {main_emotion}"
         )
 
     # ---------- Sub Emotion (DistilBERT) ----------
@@ -722,8 +723,17 @@ def get_ai_response(username, user_text, history):
     sub_emotion = sub_encoder.inverse_transform([sub_pred])[0]
 
     if sub_confidence < 0.45:
-        print(f"Low confidence ({sub_confidence:.2f}) → Using sub fallback")
+        print(
+            f"Low confidence ({sub_confidence:.2f}) "
+            f"→ Model predicted: {sub_emotion} "
+            f"→ Using sub fallback"
+        )
         sub_emotion = fallback_sub_emotion(user_text, main_emotion)
+    else:
+        print(
+            f"High confidence ({sub_confidence:.2f}) "
+            f"→ Model predicted: {sub_emotion}"
+        )
 
     del main_inputs, main_outputs
     del sub_inputs, sub_outputs
@@ -830,7 +840,7 @@ Instructions:
 8. If the user has a stored goal, relate the counselling to that goal whenever appropriate.
 9. If the recurring emotion is the same as the current emotion, gently acknowledge that this feeling has appeared before.
 10. Encourage gradual progress instead of giving generic advice.
-11. Keep the response between 120 and 160 words.
+11. Keep the response between 110 and 150 words.
 12. End with one small practical action the user can take today.
 """
     try:
@@ -890,7 +900,7 @@ def history():
     FROM chat_history
     WHERE username=%s
     ORDER BY id DESC
-    LIMIT 10
+    LIMIT 20
     ) t
     ORDER BY created_at ASC
     """, (username,))
