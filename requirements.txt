@@ -30,3 +30,4 @@ itsdangerous
 Jinja2
 MarkupSafe
 blinker
+gunicorn==23.0.0
