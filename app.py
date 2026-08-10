@@ -112,12 +112,18 @@ print(f"Using device: {device}")
 # ==========================================
 
 counsel_df = joblib.load("models/counseling_dataset.pkl")
+
 embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L12-v2")
 
-# Load the already-created FAISS index
-COUNSELLING_INDEX = faiss.read_index("models/counseling_faiss.index")
+# Load precomputed counselling embeddings
+all_embeddings = np.load("models/counselling_embeddings.npy").astype("float32")
 
-print("✅ RAG model and FAISS index loaded successfully.")
+# Build FAISS index from precomputed embeddings
+COUNSELLING_INDEX = faiss.IndexFlatL2(all_embeddings.shape[1])
+
+COUNSELLING_INDEX.add(all_embeddings)
+
+print("✅ RAG model, embeddings and FAISS index loaded successfully.")
 
 quiz_df = pd.read_csv(
     "datasets/emotion_mcq_dataset.csv",
