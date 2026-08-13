@@ -460,8 +460,7 @@ def fallback_sub_emotion(text, main_emotion):
 
         disapproval = [
             "wrong","unfair","cheated","betrayed",
-            "lied","lie","fake","corrupt","stolen",
-            "my wallet","took my wallet"
+            "lied","lie","fake","corrupt","stolen","my wallet","took my wallet"
         ]
 
         if any(k in text for k in anger):
@@ -504,10 +503,8 @@ def fallback_sub_emotion(text, main_emotion):
     elif main_emotion == "Relief":
 
         if any(k in text for k in [
-            "finally","relief","relieved","safe",
-            "escaped","problem solved","finished",
-            "it's over","its over","completed",
-            "recovered","thank god","thank goodness"
+            "finally","relief","relieved","safe","escaped","problem solved","finished",
+            "it's over","its over","completed","recovered","thank god","thank goodness"
         ]):
             return "relief"
 
@@ -517,10 +514,8 @@ def fallback_sub_emotion(text, main_emotion):
     elif main_emotion == "Curiosity":
 
         if any(k in text for k in [
-            "curious","wonder","interested",
-            "discover","explore","learn",
-            "why","how","what if",
-            "explain","tell me","can you",
+            "curious","wonder","interested","discover","explore","learn",
+            "why","how","what if","explain","tell me","can you",
             "question","research"
         ]):
             return "curiosity"
@@ -538,20 +533,73 @@ def fallback_sub_emotion(text, main_emotion):
         ]):
             return "embarrassment"
         return "embarrassment"
-    
+    # ================= PHYSICAL WELLBEING =================
+    elif main_emotion == "Neutral":
+        physical_symptoms = [
+            "headache","head ache","migraine","insomnia","can't sleep","cannot sleep",
+            "sleep problem","tired","exhausted","fatigue","low energy","body pain",
+            "stomach pain"
+        ]
+        if any(k in text for k in physical_symptoms):
+            return "Physical Wellbeing"
     return "neutral"
 
-def generate_wellness_card(main_emotion, sub_emotion):
+def generate_wellness_card(
+    main_emotion,
+    sub_emotion,
+    main_confidence,
+    sub_confidence,
+    user_text
+):
 
-    prompt = f"""
-You are a mental wellness coach.
+    if main_confidence >= 0.45:
 
-The detected emotion is:
+        emotion_instruction = f"""
+The emotion model has reasonably high confidence.
 
 Main Emotion: {main_emotion}
+Main Emotion Confidence: {main_confidence:.2f}
+
 Sub Emotion: {sub_emotion}
+Sub Emotion Confidence: {sub_confidence:.2f}
+
+Use these detected emotions as the primary guidance,
+but still consider the user's actual message before
+generating the wellness card.
+"""
+
+    else:
+
+        emotion_instruction = f"""
+The emotion model has LOW confidence.
+
+Model Main Emotion: {main_emotion}
+Model Main Emotion Confidence: {main_confidence:.2f}
+
+Model Sub Emotion: {sub_emotion}
+Model Sub Emotion Confidence: {sub_confidence:.2f}
+
+Do NOT blindly trust the predicted emotions.
+
+Instead, analyze the user's actual message carefully.
+Groq should independently determine what emotional,
+mental-wellness, or practical support is most appropriate.
+
+The model prediction is only a weak signal in this case.
+The user's actual words and context should take priority.
+"""
+
+    prompt = f"""
+You are a mental wellness coach inside an AI-powered
+Smart Study Assistant.
+
+User's message:
+{user_text}
+
+{emotion_instruction}
 
 Generate ONE personalized wellness card.
+
 Return exactly in this format:
 
 🌱 Focus:
@@ -569,19 +617,42 @@ Return exactly in this format:
 💬 Reminder:
 ...
 
-Keep it under 120 words.
-"""
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
-    )
+Rules:
 
-    return response.choices[0].message.content
+1. Make the card relevant to the user's actual message.
+2. Understand the user's situation before choosing the advice.
+3. If model confidence is high, use the detected emotions
+   as the primary guidance.
+4. If model confidence is low, prioritize your own
+   interpretation of the user's actual message.
+5. Do not mention confidence scores to the user.
+6. Do not state that the detected emotion is certain.
+7. Do not invent personal facts.
+8. Keep the advice practical, supportive, and concise.
+9. Keep it under 120 words.
+"""
+
+    try:
+
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a helpful mental wellness coach."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+        )
+
+        return response.choices[0].message.content
+
+    except Exception:
+        traceback.print_exc()
+        return ""
 
 def is_mental_health_query(text):
     X = mental_vectorizer.transform([text])
@@ -590,6 +661,13 @@ def is_mental_health_query(text):
 
 def secondary_mental_check(text):
     text = text.lower()
+
+    wellbeing_symptoms = [
+        "headache","headaches","migraine","body pain","fatigue","exhausted",
+        "tired","can't sleep","cannot sleep","insomnia","sleep problem",
+        "loss of appetite","appetite","restless","restlessness","physical symptoms",
+        "feeling unwell","appetite problem"
+    ]
 
     emotion_words = [
         "happy","sad","fear","angry","anxious","anxiety",
@@ -613,8 +691,9 @@ def secondary_mental_check(text):
 
     has_emotion = any(word in text for word in emotion_words)
     has_event = any(word in text for word in life_events)
+    has_symptom = any(word in text for word in wellbeing_symptoms)
 
-    return has_emotion or (has_emotion and has_event)
+    return has_emotion or has_symptom
 
 # ==========================================
 # AI Response Function
@@ -765,16 +844,13 @@ def get_ai_response(username, user_text, history):
         best_responses
         )
     rag_context = "\n\n".join(best_responses)
-    print(
-        f"Main: {main_emotion} ({main_confidence:.2f}) | Sub: {sub_emotion}")
+    print(f"Main: {main_emotion} ({main_confidence:.2f}) | Sub: {sub_emotion}")
 
     # Conversation Memory
     conversation = ""
     for msg in history or []:
 
-        conversation += (
-            f'{msg["role"]}: {msg["content"]}\n'
-        )
+        conversation += (f'{msg["role"]}: {msg["content"]}\n')
 
     prompt = f"""
 You are a Psychological Remedies AI Assistant.
@@ -835,6 +911,13 @@ Instructions:
 10. Encourage gradual progress instead of giving generic advice.
 11. Keep the response between 110 and 150 words.
 12. End with one small practical action the user can take today.
+13. If the query is relevant to psychological wellbeing but does not clearly express an emotion, keep:
+    Main Emotion = "Not Applicable"
+    Sub Emotion = "Not Applicable"
+    Still provide a helpful AI response and Personalized Wellness Card.
+14. Do not infer sadness, anxiety, fear, or another emotion solely from a physical symptom such as headache, fatigue, or body pain.
+15. For physical wellbeing symptoms, provide general supportive guidance and recommend appropriate professional medical 
+attention when the symptom is frequent, persistent, severe, or concerning.
 """
     try:
 
@@ -854,7 +937,10 @@ Instructions:
         reply = response.choices[0].message.content
         wellness_card = generate_wellness_card(
             main_emotion,
-            sub_emotion
+            sub_emotion,
+            main_confidence,
+            sub_confidence,
+            user_text
         )
         return main_emotion, sub_emotion, reply, wellness_card 
 

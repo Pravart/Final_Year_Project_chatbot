@@ -9,6 +9,7 @@ import streamlit as st
 from dotenv import load_dotenv
 from mysql.connector import Error as MySQLError
 from requests import RequestException
+import re
 from datetime import datetime
 
 # ---------------- Page Config (MUST be first Streamlit command) ----------------
@@ -16,6 +17,471 @@ st.set_page_config(
     page_title="Psychological Remedies Chatbot",
     page_icon="🧠",
     layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ============================================================
+# CUSTOM CSS — POLISHED MODERN UI
+# ============================================================
+
+st.markdown(
+    """
+    <style>
+
+    /* ========================================================
+       GLOBAL APP
+       ======================================================== */
+
+    .stApp {
+        background: var(--background-color);
+        color: var(--text-color);
+    }
+
+    .main .block-container {
+        max-width: 1250px;
+        padding-top: 1.5rem;
+        padding-bottom: 6rem;
+    }
+
+    /* ========================================================
+       SIDEBAR
+       ======================================================== */
+
+    section[data-testid="stSidebar"] {
+        background: var(--secondary-background-color);
+        border-right: 1px solid rgba(128,128,128,.14);
+    }
+
+    section[data-testid="stSidebar"] .block-container {
+        padding: 1.4rem 1rem;
+    }
+
+    .sidebar-logo {
+        font-size: 24px;
+        font-weight: 800;
+        letter-spacing: -.5px;
+        margin-bottom: 3px;
+    }
+
+    .sidebar-subtitle {
+        font-size: 12px;
+        color: rgba(128,128,128,.9);
+        margin-bottom: 18px;
+    }
+
+    .user-badge {
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: rgba(46,204,113,.09);
+        border: 1px solid rgba(46,204,113,.18);
+        color: #35c77a;
+        font-size: 13px;
+        font-weight: 650;
+        margin-bottom: 18px;
+    }
+
+    .sidebar-section {
+        margin-top: 18px;
+        margin-bottom: 7px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: rgba(128,128,128,.75);
+    }
+
+    .recent-chat {
+        padding: 9px 11px;
+        margin-bottom: 7px;
+        border-radius: 11px;
+        background: var(--background-color);
+        border: 1px solid rgba(128,128,128,.13);
+        font-size: 12px;
+        color: var(--text-color);
+        transition: .2s ease;
+    }
+
+    .recent-chat:hover {
+        border-color: rgba(99,102,241,.4);
+        transform: translateX(2px);
+    }
+
+    /* ========================================================
+       SIDEBAR RADIO NAVIGATION
+       ======================================================== */
+
+    section[data-testid="stSidebar"] div[role="radiogroup"] label {
+        border-radius: 10px;
+        padding: 8px 10px;
+        margin-bottom: 3px;
+        transition: .2s ease;
+    }
+
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
+        background: rgba(99,102,241,.09);
+    }
+
+    /* ========================================================
+       MAIN HEADER
+       ======================================================== */
+
+    .app-header {
+        position: relative;
+        overflow: hidden;
+        padding: 26px 30px;
+        margin-bottom: 22px;
+        border-radius: 22px;
+        background: var(--secondary-background-color);
+        border: 1px solid rgba(128,128,128,.14);
+        box-shadow: 0 8px 30px rgba(0,0,0,.06);
+    }
+
+    .app-header::after {
+        content: "";
+        position: absolute;
+        width: 180px;
+        height: 180px;
+        right: -70px;
+        top: -80px;
+        border-radius: 50%;
+        background: rgba(99,102,241,.08);
+    }
+
+    .app-title {
+        position: relative;
+        z-index: 1;
+        font-size: 32px;
+        font-weight: 850;
+        letter-spacing: -1px;
+        margin: 0;
+    }
+
+    .app-subtitle {
+        position: relative;
+        z-index: 1;
+        margin-top: 7px;
+        font-size: 14px;
+        color: rgba(128,128,128,.95);
+    }
+
+    .online-status {
+        position: relative;
+        z-index: 1;
+        display: inline-block;
+        margin-top: 14px;
+        padding: 6px 12px;
+        border-radius: 30px;
+        background: rgba(46,204,113,.10);
+        border: 1px solid rgba(46,204,113,.18);
+        color: #35c77a;
+        font-size: 11px;
+        font-weight: 750;
+    }
+
+    /* ========================================================
+       CHAT AREA
+       ======================================================== */
+
+    .user-bubble {
+        width: fit-content;
+        max-width: 78%;
+        margin: 14px 0 3px auto;
+        padding: 13px 17px;
+        border-radius: 18px 18px 5px 18px;
+        background: rgba(59,130,246,.13);
+        border: 1px solid rgba(59,130,246,.22);
+        color: var(--text-color);
+        line-height: 1.55;
+        box-shadow: 0 3px 12px rgba(59,130,246,.05);
+    }
+
+    .assistant-bubble {
+        width: fit-content;
+        max-width: 90%;
+        margin: 14px auto 3px 0;
+        padding: 18px 20px;
+        border-radius: 18px 18px 18px 5px;
+        background: var(--secondary-background-color);
+        border: 1px solid rgba(128,128,128,.14);
+        color: var(--text-color);
+        line-height: 1.65;
+        box-shadow: 0 5px 18px rgba(0,0,0,.055);
+    }
+
+    .assistant-bubble p {
+        margin-bottom: 9px;
+    }
+
+    .message-time {
+        font-size: 10px;
+        color: rgba(128,128,128,.7);
+        margin: 4px 5px 14px;
+    }
+
+    /* ========================================================
+       EMOTION ANALYSIS
+       ======================================================== */
+
+    .emotion-card {
+        margin: 12px 0 18px;
+        padding: 18px;
+        border-radius: 18px;
+        background: rgba(139,92,246,.08);
+        border: 1px solid rgba(139,92,246,.17);
+        box-shadow: 0 4px 18px rgba(139,92,246,.04);
+    }
+
+    .emotion-title {
+        font-size: 15px;
+        font-weight: 800;
+        color: #9b82f5;
+        margin-bottom: 14px;
+    }
+
+    .emotion-label {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .5px;
+        color: rgba(128,128,128,.75);
+    }
+
+    .emotion-value {
+        margin-top: 4px;
+        font-size: 16px;
+        font-weight: 750;
+        color: var(--text-color);
+    }
+
+    /* ========================================================
+       WELLNESS CARD
+       ======================================================== */
+
+    .wellness-wrapper {
+        margin: 18px 0 24px;
+        padding: 20px;
+        border-radius: 20px;
+        background: rgba(46,204,113,.07);
+        border: 1px solid rgba(46,204,113,.18);
+        box-shadow: 0 6px 22px rgba(46,204,113,.045);
+    }
+
+    .wellness-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+        font-size: 21px;
+        font-weight: 850;
+        letter-spacing: -.3px;
+        color: var(--text-color);
+    }
+
+    .wellness-item {
+        padding: 13px 15px;
+        margin-bottom: 9px;
+        border-radius: 13px;
+        background: var(--secondary-background-color);
+        border: 1px solid rgba(128,128,128,.13);
+        transition: .2s ease;
+    }
+
+    .wellness-item:hover {
+        transform: translateY(-1px);
+        border-color: rgba(46,204,113,.3);
+    }
+
+    .wellness-label {
+        margin-bottom: 4px;
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .6px;
+        color: #42b879;
+    }
+
+    .wellness-text {
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--text-color);
+    }
+
+    /* ========================================================
+       AI PIPELINE
+       ======================================================== */
+
+    .pipeline-card {
+        padding: 20px;
+        margin-top: 18px;
+        border-radius: 18px;
+        background: var(--secondary-background-color);
+        border: 1px solid rgba(128,128,128,.14);
+        box-shadow: 0 5px 20px rgba(0,0,0,.04);
+    }
+
+    .pipeline-title {
+        font-size: 15px;
+        font-weight: 800;
+        margin-bottom: 15px;
+    }
+
+    .pipeline-step {
+        padding: 11px 14px;
+        margin: 7px 0;
+        border-radius: 11px;
+        background: var(--background-color);
+        border: 1px solid rgba(128,128,128,.12);
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--text-color);
+    }
+
+    .pipeline-arrow {
+        text-align: center;
+        font-size: 13px;
+        color: rgba(128,128,128,.65);
+    }
+
+    /* ========================================================
+       DASHBOARD / PROGRESS CARDS
+       ======================================================== */
+
+    .dashboard-card {
+        min-height: 105px;
+        padding: 18px;
+        border-radius: 17px;
+        background: var(--secondary-background-color);
+        border: 1px solid rgba(128,128,128,.14);
+        box-shadow: 0 5px 18px rgba(0,0,0,.045);
+        transition: .2s ease;
+    }
+
+    .dashboard-card:hover {
+        transform: translateY(-3px);
+        border-color: rgba(99,102,241,.25);
+        box-shadow: 0 9px 25px rgba(0,0,0,.08);
+    }
+
+    .dashboard-label {
+        font-size: 11px;
+        font-weight: 750;
+        text-transform: uppercase;
+        letter-spacing: .5px;
+        color: rgba(128,128,128,.78);
+    }
+
+    .dashboard-value {
+        margin-top: 8px;
+        font-size: 26px;
+        font-weight: 850;
+        letter-spacing: -.5px;
+        color: var(--text-color);
+    }
+
+    /* ========================================================
+       BUTTONS
+       ======================================================== */
+
+    .stButton > button {
+        border-radius: 11px;
+        font-weight: 700;
+        border: 1px solid rgba(128,128,128,.18);
+        transition: .2s ease;
+    }
+
+    .stButton > button:hover {
+        transform: translateY(-1px);
+    }
+
+    /* ========================================================
+       DOWNLOAD BUTTON
+       ======================================================== */
+
+    .stDownloadButton > button {
+        border-radius: 11px;
+        font-weight: 700;
+    }
+
+    /* ========================================================
+       CHAT INPUT
+       ======================================================== */
+
+    div[data-testid="stChatInput"] {
+        border-radius: 18px;
+    }
+
+    div[data-testid="stChatInput"] textarea {
+        border-radius: 16px;
+    }
+
+    /* ========================================================
+       METRICS
+       ======================================================== */
+
+    div[data-testid="stMetric"] {
+        background: var(--secondary-background-color);
+        border: 1px solid rgba(128,128,128,.14);
+        padding: 15px;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,.04);
+    }
+
+    /* ========================================================
+       EXPANDER
+       ======================================================== */
+
+    div[data-testid="stExpander"] {
+        border-radius: 15px;
+        border: 1px solid rgba(128,128,128,.14);
+    }
+
+    /* ========================================================
+       DIVIDER
+       ======================================================== */
+
+    .soft-divider {
+        border: none;
+        border-top: 1px solid rgba(128,128,128,.15);
+        margin: 24px 0;
+    }
+
+    /* ========================================================
+       MOBILE
+       ======================================================== */
+
+    @media (max-width: 768px) {
+
+        .main .block-container {
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+
+        .app-header {
+            padding: 21px;
+            border-radius: 18px;
+        }
+
+        .app-title {
+            font-size: 25px;
+        }
+
+        .user-bubble,
+        .assistant-bubble {
+            max-width: 100%;
+        }
+
+        .wellness-wrapper {
+            padding: 15px;
+        }
+
+        .dashboard-card {
+            margin-bottom: 8px;
+        }
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True
 )
 
 # ---------------- Load Environment ----------------
@@ -581,14 +1047,27 @@ def render_chat_page() -> None:
     sub_emotion = result["sub_emotion"]
     reply = result["reply"]
     wellness_card = result.get("wellness_card", "")
-
+    # ------------------------------------------------------------
+    # # BUILD AI RESPONSE
+    # # ------------------------------------------------------------
     assistant_content = reply
 
+    # ------------------------------------------------------------
+    # ADD WELLNESS CARD
+    # ------------------------------------------------------------
     if wellness_card:
-        assistant_content += (
-            "\n\n---\n\n"
-            "## 🌱 Personalized Wellness Card\n\n"
+        wellness_card = wellness_card.strip()
+
+        wellness_card = (
+            wellness_card
+            .replace("💨 Exercise:", "\n💨 Exercise:")
+            .replace("📝 Reflection:", "\n📝 Reflection:")
+            .replace("🎯 Tiny Goal:", "\n🎯 Tiny Goal:")
+            .replace("💬 Reminder:", "\n💬 Reminder:")
         )
+
+        assistant_content += "\n\n---\n\n"
+        assistant_content += "### 🌱 Personalized Wellness Card\n\n"
         assistant_content += wellness_card
 
     current_time = datetime.now().strftime("%d %b %Y, %I:%M %p")
