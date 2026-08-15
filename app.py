@@ -666,7 +666,8 @@ def secondary_mental_check(text):
         "headache","headaches","migraine","body pain","fatigue","exhausted",
         "tired","can't sleep","cannot sleep","insomnia","sleep problem",
         "loss of appetite","appetite","restless","restlessness","physical symptoms",
-        "feeling unwell","appetite problem"
+        "feeling unwell","appetite problem","stomach pain","nausea","dizziness",
+        "lightheaded","chest pain"
     ]
 
     emotion_words = [
@@ -677,23 +678,22 @@ def secondary_mental_check(text):
         "overthinking","overthink","jealous","guilty",
         "empty","worthless","tired","exhausted",
         "mood","uplift","sleepy","tension","tense",
-        "mental","psychological","emotion","feeling"
+        "mental","psychological","emotion","feeling","furious"
     ]
 
     life_events = [
         "exam","college","school","study","marks",
         "result","failed","failure","pass",
-        "job","work","office","career",
+        "job","work","office","career","placements",
         "family","friend","relationship",
-        "breakup","parents","salary",
-        "interview"
+        "breakup","parents","salary","interview"
     ]
 
     has_emotion = any(word in text for word in emotion_words)
     has_event = any(word in text for word in life_events)
     has_symptom = any(word in text for word in wellbeing_symptoms)
 
-    return has_emotion or has_symptom
+    return has_emotion or has_symptom or has_event
 
 # ==========================================
 # AI Response Function
@@ -918,11 +918,14 @@ Instructions:
 14. Do not infer sadness, anxiety, fear, or another emotion solely from a physical symptom such as headache, fatigue, or body pain.
 15. For physical wellbeing symptoms, provide general supportive guidance and recommend appropriate professional medical 
 attention when the symptom is frequent, persistent, severe, or concerning.
+13. Do NOT generate a Personalized Wellness Card in your reply.
+14. Return only the counselling response.
+The Personalized Wellness Card is generated separately by the Python function generate_wellness_card().
 """
     try:
 
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=[
                 {
                     "role": "system",
