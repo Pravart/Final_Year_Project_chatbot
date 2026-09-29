@@ -1,0 +1,1338 @@
+import os
+import hashlib
+import uuid
+from typing import Any
+
+import mysql.connector
+import requests
+import streamlit as st
+from dotenv import load_dotenv
+from mysql.connector import Error as MySQLError
+from requests import RequestException
+import re
+from datetime import datetime
+
+# ---------------- Page Config (MUST be first Streamlit command) ----------------
+st.set_page_config(
+    page_title="Psychological Remedies Chatbot",
+    page_icon="🧠",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ============================================================
+# CUSTOM CSS — POLISHED MODERN UI
+# ============================================================
+
+st.markdown(
+    """
+    <style>
+
+    /* ========================================================
+       GLOBAL APP
+       ======================================================== */
+
+    .stApp {
+        background: var(--background-color);
+        color: var(--text-color);
+    }
+
+    .main .block-container {
+        max-width: 1250px;
+        padding-top: 1.5rem;
+        padding-bottom: 6rem;
+    }
+
+    /* ========================================================
+       SIDEBAR
+       ======================================================== */
+
+    section[data-testid="stSidebar"] {
+        background: var(--secondary-background-color);
+        border-right: 1px solid rgba(128,128,128,.14);
+    }
+
+    section[data-testid="stSidebar"] .block-container {
+        padding: 1.4rem 1rem;
+    }
+
+    .sidebar-logo {
+        font-size: 24px;
+        font-weight: 800;
+        letter-spacing: -.5px;
+        margin-bottom: 3px;
+    }
+
+    .sidebar-subtitle {
+        font-size: 12px;
+        color: rgba(128,128,128,.9);
+        margin-bottom: 18px;
+    }
+
+    .user-badge {
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: rgba(46,204,113,.09);
+        border: 1px solid rgba(46,204,113,.18);
+        color: #35c77a;
+        font-size: 13px;
+        font-weight: 650;
+        margin-bottom: 18px;
+    }
+
+    .sidebar-section {
+        margin-top: 18px;
+        margin-bottom: 7px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: rgba(128,128,128,.75);
+    }
+
+    .recent-chat {
+        padding: 9px 11px;
+        margin-bottom: 7px;
+        border-radius: 11px;
+        background: var(--background-color);
+        border: 1px solid rgba(128,128,128,.13);
+        font-size: 12px;
+        color: var(--text-color);
+        transition: .2s ease;
+    }
+
+    .recent-chat:hover {
+        border-color: rgba(99,102,241,.4);
+        transform: translateX(2px);
+    }
+
+    /* ========================================================
+       SIDEBAR RADIO NAVIGATION
+       ======================================================== */
+
+    section[data-testid="stSidebar"] div[role="radiogroup"] label {
+        border-radius: 10px;
+        padding: 8px 10px;
+        margin-bottom: 3px;
+        transition: .2s ease;
+    }
+
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
+        background: rgba(99,102,241,.09);
+    }
+
+    /* ========================================================
+       MAIN HEADER
+       ======================================================== */
+
+    .app-header {
+        position: relative;
+        overflow: hidden;
+        padding: 26px 30px;
+        margin-bottom: 22px;
+        border-radius: 22px;
+        background: var(--secondary-background-color);
+        border: 1px solid rgba(128,128,128,.14);
+        box-shadow: 0 8px 30px rgba(0,0,0,.06);
+    }
+
+    .app-header::after {
+        content: "";
+        position: absolute;
+        width: 180px;
+        height: 180px;
+        right: -70px;
+        top: -80px;
+        border-radius: 50%;
+        background: rgba(99,102,241,.08);
+    }
+
+    .app-title {
+        position: relative;
+        z-index: 1;
+        font-size: 32px;
+        font-weight: 850;
+        letter-spacing: -1px;
+        margin: 0;
+    }
+
+    .app-subtitle {
+        position: relative;
+        z-index: 1;
+        margin-top: 7px;
+        font-size: 14px;
+        color: rgba(128,128,128,.95);
+    }
+
+    .online-status {
+        position: relative;
+        z-index: 1;
+        display: inline-block;
+        margin-top: 14px;
+        padding: 6px 12px;
+        border-radius: 30px;
+        background: rgba(46,204,113,.10);
+        border: 1px solid rgba(46,204,113,.18);
+        color: #35c77a;
+        font-size: 11px;
+        font-weight: 750;
+    }
+
+    /* ========================================================
+       CHAT AREA
+       ======================================================== */
+
+    .user-bubble {
+        width: fit-content;
+        max-width: 78%;
+        margin: 14px 0 3px auto;
+        padding: 13px 17px;
+        border-radius: 18px 18px 5px 18px;
+        background: rgba(59,130,246,.13);
+        border: 1px solid rgba(59,130,246,.22);
+        color: var(--text-color);
+        line-height: 1.55;
+        box-shadow: 0 3px 12px rgba(59,130,246,.05);
+    }
+
+    .assistant-bubble {
+        width: fit-content;
+        max-width: 90%;
+        margin: 14px auto 3px 0;
+        padding: 18px 20px;
+        border-radius: 18px 18px 18px 5px;
+        background: var(--secondary-background-color);
+        border: 1px solid rgba(128,128,128,.14);
+        color: var(--text-color);
+        line-height: 1.65;
+        box-shadow: 0 5px 18px rgba(0,0,0,.055);
+    }
+
+    .assistant-bubble p {
+        margin-bottom: 9px;
+    }
+
+    .message-time {
+        font-size: 10px;
+        color: rgba(128,128,128,.7);
+        margin: 4px 5px 14px;
+    }
+
+    /* ========================================================
+       EMOTION ANALYSIS
+       ======================================================== */
+
+    .emotion-card {
+        margin: 12px 0 18px;
+        padding: 18px;
+        border-radius: 18px;
+        background: rgba(139,92,246,.08);
+        border: 1px solid rgba(139,92,246,.17);
+        box-shadow: 0 4px 18px rgba(139,92,246,.04);
+    }
+
+    .emotion-title {
+        font-size: 15px;
+        font-weight: 800;
+        color: #9b82f5;
+        margin-bottom: 14px;
+    }
+
+    .emotion-label {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .5px;
+        color: rgba(128,128,128,.75);
+    }
+
+    .emotion-value {
+        margin-top: 4px;
+        font-size: 16px;
+        font-weight: 750;
+        color: var(--text-color);
+    }
+
+    /* ========================================================
+       WELLNESS CARD
+       ======================================================== */
+
+    .wellness-wrapper {
+        margin: 18px 0 24px;
+        padding: 20px;
+        border-radius: 20px;
+        background: rgba(46,204,113,.07);
+        border: 1px solid rgba(46,204,113,.18);
+        box-shadow: 0 6px 22px rgba(46,204,113,.045);
+    }
+
+    .wellness-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+        font-size: 21px;
+        font-weight: 850;
+        letter-spacing: -.3px;
+        color: var(--text-color);
+    }
+
+    .wellness-item {
+        padding: 13px 15px;
+        margin-bottom: 9px;
+        border-radius: 13px;
+        background: var(--secondary-background-color);
+        border: 1px solid rgba(128,128,128,.13);
+        transition: .2s ease;
+    }
+
+    .wellness-item:hover {
+        transform: translateY(-1px);
+        border-color: rgba(46,204,113,.3);
+    }
+
+    .wellness-label {
+        margin-bottom: 4px;
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .6px;
+        color: #42b879;
+    }
+
+    .wellness-text {
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--text-color);
+    }
+
+    /* ========================================================
+       AI PIPELINE
+       ======================================================== */
+
+    .pipeline-card {
+        padding: 20px;
+        margin-top: 18px;
+        border-radius: 18px;
+        background: var(--secondary-background-color);
+        border: 1px solid rgba(128,128,128,.14);
+        box-shadow: 0 5px 20px rgba(0,0,0,.04);
+    }
+
+    .pipeline-title {
+        font-size: 15px;
+        font-weight: 800;
+        margin-bottom: 15px;
+    }
+
+    .pipeline-step {
+        padding: 11px 14px;
+        margin: 7px 0;
+        border-radius: 11px;
+        background: var(--background-color);
+        border: 1px solid rgba(128,128,128,.12);
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--text-color);
+    }
+
+    .pipeline-arrow {
+        text-align: center;
+        font-size: 13px;
+        color: rgba(128,128,128,.65);
+    }
+
+    /* ========================================================
+       DASHBOARD / PROGRESS CARDS
+       ======================================================== */
+
+    .dashboard-card {
+        min-height: 105px;
+        padding: 18px;
+        border-radius: 17px;
+        background: var(--secondary-background-color);
+        border: 1px solid rgba(128,128,128,.14);
+        box-shadow: 0 5px 18px rgba(0,0,0,.045);
+        transition: .2s ease;
+    }
+
+    .dashboard-card:hover {
+        transform: translateY(-3px);
+        border-color: rgba(99,102,241,.25);
+        box-shadow: 0 9px 25px rgba(0,0,0,.08);
+    }
+
+    .dashboard-label {
+        font-size: 11px;
+        font-weight: 750;
+        text-transform: uppercase;
+        letter-spacing: .5px;
+        color: rgba(128,128,128,.78);
+    }
+
+    .dashboard-value {
+        margin-top: 8px;
+        font-size: 26px;
+        font-weight: 850;
+        letter-spacing: -.5px;
+        color: var(--text-color);
+    }
+
+    /* ========================================================
+       BUTTONS
+       ======================================================== */
+
+    .stButton > button {
+        border-radius: 11px;
+        font-weight: 700;
+        border: 1px solid rgba(128,128,128,.18);
+        transition: .2s ease;
+    }
+
+    .stButton > button:hover {
+        transform: translateY(-1px);
+    }
+
+    /* ========================================================
+       DOWNLOAD BUTTON
+       ======================================================== */
+
+    .stDownloadButton > button {
+        border-radius: 11px;
+        font-weight: 700;
+    }
+
+    /* ========================================================
+       CHAT INPUT
+       ======================================================== */
+
+    div[data-testid="stChatInput"] {
+        border-radius: 18px;
+    }
+
+    div[data-testid="stChatInput"] textarea {
+        border-radius: 16px;
+    }
+
+    /* ========================================================
+       METRICS
+       ======================================================== */
+
+    div[data-testid="stMetric"] {
+        background: var(--secondary-background-color);
+        border: 1px solid rgba(128,128,128,.14);
+        padding: 15px;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,.04);
+    }
+
+    /* ========================================================
+       EXPANDER
+       ======================================================== */
+
+    div[data-testid="stExpander"] {
+        border-radius: 15px;
+        border: 1px solid rgba(128,128,128,.14);
+    }
+
+    /* ========================================================
+       DIVIDER
+       ======================================================== */
+
+    .soft-divider {
+        border: none;
+        border-top: 1px solid rgba(128,128,128,.15);
+        margin: 24px 0;
+    }
+
+    /* ========================================================
+       MOBILE
+       ======================================================== */
+
+    @media (max-width: 768px) {
+
+        .main .block-container {
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+
+        .app-header {
+            padding: 21px;
+            border-radius: 18px;
+        }
+
+        .app-title {
+            font-size: 25px;
+        }
+
+        .user-bubble,
+        .assistant-bubble {
+            max-width: 100%;
+        }
+
+        .wellness-wrapper {
+            padding: 15px;
+        }
+
+        .dashboard-card {
+            margin-bottom: 8px;
+        }
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# ---------------- Load Environment ----------------
+load_dotenv()
+
+API_URL = os.getenv("API_URL", "http://127.0.0.1:5000").rstrip("/")
+
+MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
+MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
+MYSQL_USER = os.getenv("MYSQL_USER", "root")
+MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
+MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "psychological_chatbot")
+
+GENDER_OPTIONS = ["Male", "Female", "Other"]
+
+def hash_password(password: str) -> str:
+    """Return a SHA-256 hash so raw passwords are not stored in MySQL."""
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+def get_db_connection():
+    return mysql.connector.connect(
+        host=MYSQL_HOST,
+        port=MYSQL_PORT,
+        user=MYSQL_USER,
+        password=MYSQL_PASSWORD,
+        database=MYSQL_DATABASE,
+        autocommit=False,
+    )
+
+
+def init_state() -> None:
+    defaults: dict[str, Any] = {
+        "screen": "welcome",
+        "authenticated": False,
+        "is_guest": False,
+        "username": None,
+        "messages": [],
+        "navigation": "💬 Chat",
+        "guest_id": None,
+        "guest_spiritual_preference": "No",
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+
+def reset_session() -> None:
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.rerun()
+
+
+def go_to(screen: str) -> None:
+    st.session_state.screen = screen
+    st.rerun()
+
+
+def load_history(username: str) -> list[dict[str, str]]:
+    try:
+        response = requests.get(
+            f"{API_URL}/history",
+            params={"username": username},
+            timeout=15,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data if isinstance(data, list) else []
+    except (RequestException, ValueError):
+        st.warning("Previous chat history could not be loaded.")
+        return []
+
+def delete_chat(username, user_message):
+    requests.post(
+        f"{API_URL}/delete_chat",
+        json={
+            "username": username,
+            "user_message": user_message
+        },
+        timeout=10
+    )
+
+def fetch_profile(username: str) -> dict[str, Any]:
+    try:
+        response = requests.get(
+            f"{API_URL}/profile",
+            params={"username": username},
+            timeout=15,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return {
+            "name": data.get("name") or "",
+            "age": int(data.get("age") or 18),
+            "gender": data.get("gender") or "Other",
+            "occupation": data.get("occupation") or "",
+            "goal": data.get("goal") or "",
+            "spiritual_preference": data.get("spiritual_preference") or "No",
+        }
+    except (RequestException, ValueError, TypeError):
+        st.error("Profile could not be loaded.")
+        return {
+            "name": "",
+            "age": 18,
+            "gender": "Other",
+            "occupation": "",
+            "goal": "",
+            "spiritual_preference": "No",
+        }
+
+
+def update_profile(username: str, profile: dict[str, Any]) -> bool:
+    try:
+        response = requests.post(
+            f"{API_URL}/update_profile",
+            json={"username": username, **profile},
+            timeout=15,
+        )
+        response.raise_for_status()
+        return response.json().get("status") == "success"
+    except (RequestException, ValueError):
+        return False
+
+def fetch_quiz_score(username: str):
+    try:
+        response = requests.get(
+            f"{API_URL}/quiz_score",
+            params={"username": username},
+            timeout=15,
+        )
+        response.raise_for_status()
+        return response.json()
+    except (RequestException, ValueError):
+        return {
+            "attempted": 0,
+            "correct": 0,
+            "accuracy": 0
+        }
+
+def register_user(
+    username: str,
+    password: str,
+    name: str,
+    age: int,
+    gender: str,
+    occupation: str,
+    spiritual_preference: str,
+) -> tuple[bool, str]:
+    if not username.strip() or not password:
+        return False, "Username and password are required."
+
+    if len(password) < 6:
+        return False, "Password must contain at least 6 characters."
+
+    connection = None
+    cursor = None
+
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        cursor.execute(
+            """
+            INSERT INTO users (username, password)
+            VALUES (%s, %s)
+            """,
+            (username.strip(), hash_password(password)),
+        )
+
+        cursor.execute(
+            """
+            INSERT INTO user_profile
+            (username, name, age, gender, occupation, spiritual_preference)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (
+                username.strip(),
+                name.strip(),
+                int(age),
+                gender,
+                occupation.strip(),
+                spiritual_preference,
+            ),
+        )
+
+        connection.commit()
+        return True, "Account created successfully. Please log in."
+
+    except MySQLError as exc:
+        if connection:
+            connection.rollback()
+
+        if getattr(exc, "errno", None) == 1062:
+            return False, "That username already exists."
+
+        return False, f"Account creation failed: {exc}"
+
+    finally:
+        if cursor:
+            cursor.close()
+        if connection and connection.is_connected():
+            connection.close()
+
+
+def authenticate_user(username: str, password: str) -> bool:
+    connection = None
+    cursor = None
+
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT password
+            FROM users
+            WHERE username = %s
+            """,
+            (username.strip(),),
+        )
+        row = cursor.fetchone()
+
+        if not row:
+            return False
+
+        stored_password = row[0]
+        entered_hash = hash_password(password)
+
+        # Supports new hashed accounts and older plain-text test accounts.
+        return stored_password == entered_hash or stored_password == password
+
+    except MySQLError as exc:
+        st.exception(exc)
+        st.error("Database login error.")
+        return False
+
+    finally:
+        if cursor:
+            cursor.close()
+        if connection and connection.is_connected():
+            connection.close()
+
+
+def render_header() -> None:
+    st.title("🧠 Psychological Remedies Chatbot")
+    st.caption(
+        "Emotion-aware, RAG-supported guidance with optional personalized memory."
+    )
+
+
+def render_welcome() -> None:
+    render_header()
+    st.write("Talk freely. Your privacy choices come first.")
+
+    guest_col, login_col, signup_col = st.columns(3)
+
+    with guest_col:
+        if st.button(
+            "👤 Continue as Guest",
+            use_container_width=True,
+            type="primary",
+        ):
+            guest_id = f"guest_{uuid.uuid4().hex}"
+            st.session_state.guest_id = guest_id
+            st.session_state.username = guest_id
+            st.session_state.is_guest = True
+            st.session_state.authenticated = True
+            st.session_state.messages = []
+            st.session_state.screen = "app"
+
+            st.query_params["guest"] = guest_id
+            st.rerun()
+
+    with login_col:
+        if st.button("🔑 Login", use_container_width=True):
+            go_to("login")
+
+    with signup_col:
+        if st.button("📝 Sign Up", use_container_width=True):
+            go_to("signup")
+
+    st.info(
+        "Guest mode uses only temporary on-screen memory. "
+        "A registered account can load previous chats and profile details."
+    )
+
+
+def render_login() -> None:
+    render_header()
+    st.subheader("🔑 Login")
+
+    with st.form("login_form", clear_on_submit=False):
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        submitted = st.form_submit_button(
+            "Login",
+            use_container_width=True,
+            type="primary",
+        )
+
+    if submitted:
+        if authenticate_user(username, password):
+            st.session_state.username = username.strip()
+            st.session_state.authenticated = True
+            st.session_state.is_guest = False
+            st.session_state.messages = load_history(username.strip())
+            st.session_state.screen = "app"
+
+            st.query_params["user"] = username.strip()
+            st.rerun()
+        else:
+            st.error("Invalid username or password.")
+
+    if st.button("← Back"):
+        go_to("welcome")
+
+
+def render_signup() -> None:
+    render_header()
+    st.subheader("📝 Create Account")
+
+    with st.form("signup_form", clear_on_submit=False):
+        username = st.text_input("Choose Username")
+        password = st.text_input("Choose Password", type="password")
+        name = st.text_input("Full Name")
+        age = st.number_input(
+            "Age",
+            min_value=10,
+            max_value=100,
+            value=18,
+            step=1,
+        )
+        gender = st.selectbox("Gender", GENDER_OPTIONS)
+        occupation = st.text_input("Occupation")
+        spiritual_preference = st.selectbox(
+            "Include Spiritual & Mythological Wellness Guidance?",
+            ["No", "Yes"]
+        )
+        submitted = st.form_submit_button(
+            "Create Account",
+            use_container_width=True,
+            type="primary",
+        )
+
+    if submitted:
+        success, message = register_user(
+            username=username,
+            password=password,
+            name=name,
+            age=int(age),
+            gender=gender,
+            occupation=occupation,
+            spiritual_preference=spiritual_preference,
+        )
+        if success:
+            st.success(message)
+            st.session_state.screen = "login"
+            st.rerun()
+        else:
+            st.error(message)
+
+    if st.button("← Back"):
+        go_to("welcome")
+
+
+def render_sidebar() -> None:
+    st.sidebar.title("🧠 Psychological Remedies")
+
+    if st.session_state.is_guest:
+        st.sidebar.info("Guest session")
+        st.session_state.navigation = "💬 Chat"
+
+        st.session_state.guest_spiritual_preference = st.sidebar.selectbox(
+            "Spiritual & Mythological Wellness Guidance",
+            ["No", "Yes"],
+            index=0 if st.session_state.guest_spiritual_preference == "No" else 1,
+            key="guest_spiritual_selector"
+    )
+    else:
+        st.sidebar.success(f"Signed in as {st.session_state.username}")
+
+        st.session_state.navigation = st.sidebar.radio(
+            "Navigation",
+            ["💬 Chat","📝 Quiz", "👤 Profile"],
+            key="navigation_radio",
+        )
+
+        if not st.session_state.is_guest:
+            st.query_params["page"] = st.session_state.navigation
+
+    st.sidebar.markdown("### 🕒 Recent Chats")
+
+    recent_users = [
+        msg["content"][:40] + ("..." if len(msg["content"]) > 40 else "")
+        for msg in st.session_state.messages
+        if msg["role"] == "user"
+    ][-20:]
+    recent_users.reverse()
+    chat_container = st.sidebar.container(height=230)
+
+    with chat_container:
+        if recent_users:
+            for i, chat in enumerate(recent_users, 1):
+                st.markdown(f"**{i}.** {chat}")
+                st.divider()
+        else:
+            st.write("No chat history yet.")
+
+    if st.sidebar.button("🧹 Clear visible chat", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
+
+    if st.sidebar.button("🚪 Logout", use_container_width=True):
+        st.query_params.clear()
+        reset_session()
+
+    st.sidebar.caption(
+        "This chatbot provides supportive information and is not a substitute "
+        "for professional diagnosis, therapy, or emergency services."
+    )
+
+def render_profile_page() -> None:
+    username = st.session_state.username
+    profile = fetch_profile(username)
+
+    st.header("👤 My Profile")
+
+    gender = profile["gender"]
+    if gender not in GENDER_OPTIONS:
+        gender = "Other"
+
+    with st.form("profile_form"):
+        name = st.text_input("Name", value=profile["name"])
+        age = st.number_input(
+            "Age",
+            min_value=10,
+            max_value=100,
+            value=int(profile["age"]),
+            step=1,
+        )
+        gender = st.selectbox(
+            "Gender",
+            GENDER_OPTIONS,
+            index=GENDER_OPTIONS.index(gender),
+        )
+        occupation = st.text_input(
+            "Occupation",
+            value=profile["occupation"],
+        )
+        goal = st.text_area(
+            "Goal",
+            value=profile["goal"],
+            height=120,
+        )
+        spiritual_preference = st.selectbox(
+            "Spiritual & Mythological Wellness Guidance",["No", "Yes"],
+            index=0 if profile["spiritual_preference"] == "No" else 1,
+        )
+        submitted = st.form_submit_button(
+            "Update Profile",
+            type="primary",
+        )
+
+    if submitted:
+        updated = update_profile(
+            username,
+            {
+                "name": name.strip(),
+                "age": int(age),
+                "gender": gender,
+                "occupation": occupation.strip(),
+                "goal": goal.strip(),
+                "spiritual_preference": spiritual_preference,
+            },
+        )
+        if updated:
+            st.success("Profile updated successfully.")
+        else:
+            st.error("Profile update failed. Check that Flask is running.")
+
+
+def send_chat_message(prompt: str) -> dict[str, str] | None:
+    username = st.session_state.username
+    history = st.session_state.messages[-20:]
+
+    try:
+        response = requests.post(
+            f"{API_URL}/chat",
+            json={
+                "username": username,
+                "message": prompt,
+                "history": history,
+                "is_guest": st.session_state.is_guest,
+                "spiritual_preference": (
+                    st.session_state.guest_spiritual_preference
+                    if st.session_state.is_guest
+                    else None
+                ),
+            },
+            timeout=120,
+        )
+        response.raise_for_status()
+        result = response.json()
+
+        required = {"main_emotion", "sub_emotion", "reply"}
+        if not required.issubset(result):
+            raise ValueError("Incomplete backend response.")
+
+        return result
+
+    except RequestException as exc:
+        st.error(f"Could not reach the Flask backend: {exc}")
+    except ValueError:
+        st.error("The backend returned an invalid response.")
+
+    return None
+
+def render_chat_page() -> None:
+    st.header("💬 Supportive Chat")
+    st.write("Talk freely. I'm here to listen and offer practical support.")
+
+    if "messages" not in st.session_state:
+        st.session_state.messages = load_history(st.session_state.username)
+
+    # Welcome message
+    if not st.session_state.messages:
+        with st.chat_message("assistant", avatar="🧠"):
+            st.markdown(
+                "Hello. Share what has been on your mind, and I will respond "
+                "with supportive, personalized guidance."
+            )
+
+    # Show previous chat
+    for i, message in enumerate(st.session_state.messages[-40:]):
+        role = message.get("role", "assistant")
+        avatar = "👤" if role == "user" else "🧠"
+
+        with st.chat_message(role, avatar=avatar):
+            if role == "assistant":
+                if message.get("main_emotion"):
+                    st.markdown(f"**😊 Main emotion:** {message['main_emotion']}")
+                if message.get("sub_emotion"):
+                    st.markdown(f"**🎯 Sub-emotion:** {message['sub_emotion']}")
+            st.markdown(message.get("content", ""))
+
+            if message["role"] == "user":
+                if st.button("🗑 Delete Chat", key=f"delete_{i}"):
+                    delete_chat(
+                        st.session_state.username,
+                        message["content"]
+                    )
+                    st.session_state.messages = load_history(
+                        st.session_state.username
+                    )
+                    st.rerun()
+
+            if "time" in message:
+                st.caption(message["time"])
+
+    # Download button
+    chat_text = ""
+    for msg in st.session_state.messages:
+        chat_text += f'{msg["role"].upper()}: {msg["content"]}\n\n'
+
+    st.download_button(
+        "📥 Download Chat",
+        data=chat_text,
+        file_name="chat_history.txt",
+        mime="text/plain"
+    )
+
+    # User input
+    prompt = st.chat_input("Type your message...")
+
+    if not prompt:
+        return
+
+    prompt = prompt.strip()
+
+    if not prompt:
+        return
+
+    with st.chat_message("user", avatar="👤"):
+        st.markdown(prompt)
+
+    # Backend call
+    with st.spinner("Analyzing your emotions..."):
+        result = send_chat_message(prompt)
+
+    main_emotion = result["main_emotion"]
+    sub_emotion = result["sub_emotion"]
+    reply = result["reply"]
+    wellness_card = result.get("wellness_card", "")
+    # ------------------------------------------------------------
+    # # BUILD AI RESPONSE
+    # # ------------------------------------------------------------
+    assistant_content = reply
+
+    # ------------------------------------------------------------
+    # ADD WELLNESS CARD
+    # ------------------------------------------------------------
+    if wellness_card:
+        wellness_card = wellness_card.strip()
+
+        wellness_card = (
+            wellness_card
+            .replace("💨 Exercise:", "\n💨 Exercise:")
+            .replace("📝 Reflection:", "\n📝 Reflection:")
+            .replace("🎯 Tiny Goal:", "\n🎯 Tiny Goal:")
+            .replace("💬 Reminder:", "\n💬 Reminder:")
+            .replace(
+                "🕉️ Spiritual & Mythological:",
+                "\n🕉️ Spiritual & Mythological:"
+            )
+        )
+
+        assistant_content += "\n\n---\n\n"
+        assistant_content += "### 🌱 Personalized Wellness Card\n\n"
+        assistant_content += wellness_card
+
+    current_time = datetime.now().strftime("%d %b %Y, %I:%M %p")
+    st.session_state.messages.append({
+        "role": "user",
+        "content": prompt,
+        "time": current_time
+    })
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": assistant_content,
+        "main_emotion": main_emotion,
+        "sub_emotion": sub_emotion,
+        "time": current_time
+    })
+    st.rerun()
+
+def render_quiz_page():
+    st.header("📝 Emotion Recognition Quiz")
+
+    score = fetch_quiz_score(st.session_state.username)
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("Attempted", score["attempted"])
+
+    with col2:
+        st.metric("Correct", score["correct"])
+
+    with col3:
+        st.metric("Accuracy", f"{score['accuracy']}%")
+
+    st.divider()
+
+    # -----------------------------
+    # Reset button (always visible)
+    # -----------------------------
+    if st.button("🔄 Reset Quiz Progress"):
+
+        reset_response = requests.post(
+            f"{API_URL}/reset_quiz",
+            json={"username": st.session_state.username},
+            timeout=30
+        )
+        reset_response.raise_for_status()
+
+        if "quiz_question" in st.session_state:
+            del st.session_state.quiz_question
+
+        if "quiz_result" in st.session_state:
+            del st.session_state.quiz_result
+
+        st.session_state.quiz_submitted = False
+
+        st.rerun()
+
+    # -----------------------------
+    # Load question
+    # -----------------------------
+    if "quiz_question" not in st.session_state:
+
+        response = requests.get(
+            f"{API_URL}/quiz",
+            params={"username": st.session_state.username},
+            timeout=30
+        )
+
+        response.raise_for_status()
+        st.session_state.quiz_question = response.json()
+
+    q = st.session_state.quiz_question
+
+    # -----------------------------
+    # Quiz completed
+    # -----------------------------
+    if q.get("completed"):
+
+        st.success("🎉 Quiz Completed!")
+
+        st.write(
+            f"### Final Score: {score['correct']} / {score['attempted']}"
+        )
+
+        st.write(
+            f"### Accuracy: {score['accuracy']}%"
+        )
+        return
+
+    # -----------------------------
+    # Progress
+    # -----------------------------
+    progress = score["attempted"] + 1
+
+    st.progress(min(progress / 10, 1.0))
+
+    st.write(f"Question {progress} / 10")
+
+    st.markdown(f"### {q['scenario']}")
+
+    options = [
+        q["option1"],
+        q["option2"],
+        q["option3"],
+        q["option4"]
+    ]
+
+    selected = st.radio(
+        "Choose the correct emotion:",
+        options,
+        key="quiz_radio"
+    )
+
+    # -----------------------------
+    # Submit Answer
+    # -----------------------------
+    if "quiz_result" not in st.session_state:
+        if st.button("Submit Answer", type="primary"):
+
+            result = requests.post(
+                f"{API_URL}/quiz_answer",
+                json={
+                    "username": st.session_state.username,
+                    "id": q["id"],
+                    "selected": selected
+                },
+                timeout=30
+            )
+            if result.status_code != 200:
+                st.error("Server Error. Please try again.")
+                return
+
+            result = result.json()
+            if "error" in result:
+                st.warning(result["error"])
+
+                if result["error"] == "Question already attempted":
+                    del st.session_state.quiz_question
+                    st.rerun()
+            else:
+                st.session_state.quiz_result = result
+                st.rerun()
+
+    # -----------------------------
+    # Show Result
+    # -----------------------------
+    if "quiz_result" in st.session_state:
+        result = st.session_state.quiz_result
+
+        if result["correct"]:
+            st.success("✅ Correct!")
+        else:
+            st.error("❌ Incorrect")
+
+        st.info(
+            f"Correct Answer: {result['correct_answer']}"
+        )
+
+        st.markdown("### 📘 Explanation")
+        st.write(result["explanation"])
+
+        # -----------------------------
+        # Next Question
+        # -----------------------------
+        if st.button("➡ Next Question"):
+
+            del st.session_state.quiz_question
+            del st.session_state.quiz_result
+
+            st.rerun()
+
+
+def render_app() -> None:
+    render_sidebar()
+    render_header()
+
+    if (
+        not st.session_state.is_guest
+        and st.session_state.navigation == "👤 Profile"
+    ):
+        render_profile_page()
+    elif (
+        not st.session_state.is_guest
+        and st.session_state.navigation == "📝 Quiz"
+    ):
+        render_quiz_page()
+    else:
+        render_chat_page()
+
+# -----------------------------
+# Initialize Session
+# -----------------------------
+init_state()
+
+# -----------------------------
+# Restore session after refresh
+# -----------------------------
+params = st.query_params
+if not st.session_state.authenticated:
+
+    if "user" in params:
+        username = params["user"]
+
+        st.session_state.username = username
+        st.session_state.authenticated = True
+        st.session_state.is_guest = False
+        st.session_state.messages = load_history(username)
+        st.session_state.screen = "app"
+
+        if params.get("page") in ["💬 Chat", "📝 Quiz", "👤 Profile"]:
+            st.session_state.navigation = params["page"]
+        else:
+            st.session_state.navigation = "💬 Chat"
+
+    elif "guest" in params:
+        guest = params["guest"]
+
+        st.session_state.username = guest
+        st.session_state.guest_id = guest
+        st.session_state.authenticated = True
+        st.session_state.is_guest = True
+        st.session_state.screen = "app"
+        st.session_state.messages = []
+
+# -----------------------------
+# Routing
+# -----------------------------
+if not st.session_state.authenticated:
+
+    if st.session_state.screen == "login":
+        render_login()
+    elif st.session_state.screen == "signup":
+        render_signup()
+    else:
+        render_welcome()
+else:
+    render_app()

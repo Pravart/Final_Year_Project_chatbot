@@ -2,7 +2,7 @@
 
 An AI-powered mental wellness chatbot that detects user emotions, predicts fine-grained sub-emotions, retrieves relevant counselling responses using Retrieval-Augmented Generation (RAG), and generates personalized psychological support using Large Language Models (LLMs).
 
-The chatbot combines Deep Learning, Natural Language Processing (NLP), Semantic Search, FAISS, DistilBERT, ONNX optimization, Machine Learning classification, and Groq Llama 3.3 to provide intelligent and personalized emotional support.
+The chatbot combines Deep Learning, Natural Language Processing (NLP), Semantic Search, FAISS, DistilBERT, ONNX optimization, Machine Learning classification, and openai/gpt-oss-120b to provide intelligent and personalized emotional support.
 
 ---
 
@@ -13,7 +13,7 @@ The chatbot combines Deep Learning, Natural Language Processing (NLP), Semantic 
 - AI-powered psychological counselling
 - Context-aware conversations
 - Personalized emotional support
-- Groq Llama 3.3 (70B Versatile)
+- openai/gpt-oss-120b
 - Conversation memory
 
 ---
@@ -124,7 +124,7 @@ Pipeline:
 - FAISS Vector Database
 - Semantic Similarity Search
 - Top counselling retrieval
-- Groq Llama 3.3 enhancement
+- openai/gpt-oss-120b enhancement
 
 This prevents hallucination and makes responses grounded in counselling knowledge.
 
@@ -225,7 +225,7 @@ Features:
 ## LLM
 
 - Groq API
-- Llama 3.3 70B Versatile
+- openai/gpt-oss-120b
 
 ## Other Libraries
 
@@ -372,7 +372,7 @@ Return Not Applicable   Main Emotion (DistilBERT)
                 FAISS Semantic Retrieval
                                │
                                ▼
-                  Groq Llama 3.3 (70B)
+                  openai/gpt-oss-120b
                                │
                                ▼
           Personalized Psychological Reply
