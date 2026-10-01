@@ -659,41 +659,216 @@ def is_mental_health_query(text):
     pred = mental_classifier.predict(X)[0]
     return pred == 1
 
+import re
+
 def secondary_mental_check(text):
-    text = text.lower()
+    """
+    Conservative fallback for obvious emotional, psychological,
+    or wellbeing-related messages that the trained mental/non-mental
+    classifier may miss.
+
+    This is a fallback, NOT the primary classifier.
+    """
+
+    text = str(text).lower().strip()
 
     wellbeing_symptoms = [
-        "headache","headaches","migraine","body pain","fatigue","exhausted",
-        "tired","can't sleep","cannot sleep","insomnia","sleep problem",
-        "loss of appetite","appetite","restless","restlessness","physical symptoms",
-        "feeling unwell","appetite problem","stomach pain","nausea","dizziness",
-        "lightheaded","chest pain"
+        "headache","headaches","migraine","body pain","fatigue","exhausted","exhaustion",
+        "tired","can't sleep","cannot sleep","insomnia","sleep problem","sleep problems",
+        "loss of appetite","appetite problem","restless","restlessness","physical symptoms",
+        "feeling unwell","stomach pain","nausea","dizziness","lightheaded","chest pain"
     ]
 
     emotion_words = [
-        "happy","sad","fear","angry","anxious","anxiety",
-        "stress","stressed","depressed","lonely","hopeless",
-        "motivation","motivated","confidence","confident",
-        "worried","panic","upset","cry","crying",
-        "overthinking","overthink","jealous","guilty",
-        "empty","worthless","tired","exhausted",
-        "mood","uplift","sleepy","tension","tense",
-        "mental","psychological","emotion","feeling","furious"
+        # Happy / positive
+        "happy","happiness","joy","joyful","excited","excitement","relieved","relief",
+
+        # Sad
+        "sad","sadness","unhappy","cry","crying","upset",
+
+        # Fear / anxiety
+        "fear","fearful","scared","afraid","anxious","anxiety","nervous","nervousness","worried",
+        "worry","panic","panicked",
+
+        # Stress / tension
+        "stress","stressed","tension","tense","overwhelmed","pressure",
+
+        # Anger
+        "angry","anger","furious","irritated","irritation","frustrated","frustration",
+
+        # Relaxation / calmness
+        "relaxed","relax","calm","peaceful",
+
+        # Depression / loneliness
+        "depressed","depression","lonely","loneliness","hopeless","helpless","worthless","empty",
+
+        # Thinking / confusion
+        "overthinking","overthink","confused","confusion",
+
+        # Social/self-conscious emotions
+        "jealous","jealousy","guilty","guilt","embarrassed","embarrassment","ashamed",
+
+        # Motivation / confidence
+        "motivation","motivated","unmotivated","confidence","confident","insecure","insecurity",
+
+        # General emotional terms
+        "mood","mood swing","mood swings","emotion","emotions","emotional","feeling",
+        "feelings","mental","psychological",
+        # Energy / sleep
+        "tired","exhausted","sleepy"
     ]
 
+    # These are useful contextual terms, but they should NOT
+    # independently make a message a mental-health query.
     life_events = [
-        "exam","college","school","study","marks",
-        "result","failed","failure","pass",
-        "job","work","office","career","placements",
-        "family","friend","relationship",
-        "breakup","parents","salary","interview"
+        "exam","exams","college","school","study","studying","studies","marks","result",
+        "failed","failure","pass","job","work","office","career","placement",
+        "placements","family","friend","friends","relationship","breakup","parents",
+        "salary","interview","interviews","competition","deadline"
     ]
 
-    has_emotion = any(word in text for word in emotion_words)
-    has_event = any(word in text for word in life_events)
-    has_symptom = any(word in text for word in wellbeing_symptoms)
+    # -----------------------------------------
+    # Whole-word / whole-phrase matching
+    # -----------------------------------------
 
-    return has_emotion or has_symptom or has_event
+    def contains_term(term):
+        pattern = r"\b" + re.escape(term) + r"\b"
+        return re.search(pattern, text, re.IGNORECASE) is not None
+
+    has_emotion = any(
+        contains_term(word)
+        for word in emotion_words
+    )
+
+    has_symptom = any(
+        contains_term(word)
+        for word in wellbeing_symptoms
+    )
+
+    # Kept for future contextual use.
+    # A life event alone does NOT make a query mental-health related.
+    has_event = any(
+        contains_term(word)
+        for word in life_events
+    )
+
+    # IMPORTANT:
+    # Do not return has_event by itself.
+    #
+    # Example:
+    # "When is my exam?" -> should not automatically be mental.
+    # "I am nervous about my exam." -> has_emotion = True.
+    #
+    # Your trained LR model is still checked separately.
+    return has_emotion or has_symptom
+
+
+def is_mental_health_conversation(user_text, history):
+    """
+    Final scope check.
+
+    Layer 1:
+        Trained mental/non-mental Logistic Regression model.
+
+    Layer 2:
+        Conservative keyword fallback.
+
+    Layer 3:
+        Conversation-aware handling for genuine follow-ups.
+    """
+
+    user_text = str(user_text).strip()
+
+    # -----------------------------------------
+    # 1. PRIMARY CHECK:
+    #    Trained Logistic Regression classifier
+    # -----------------------------------------
+
+    if is_mental_health_query(user_text):
+        return True
+
+    # -----------------------------------------
+    # 2. SECONDARY CHECK:
+    #    Explicit mental/emotional/wellbeing language missed by LR
+    # -----------------------------------------
+
+    if secondary_mental_check(user_text):
+        return True
+
+    # -----------------------------------------
+    # 3. Check whether current message appears to be a conversational follow-up
+    # -----------------------------------------
+
+    text = user_text.lower()
+
+    follow_up_phrases = [
+        "what should i do","what do i do","what to do","what can i do","how do i",
+        "how can i","how should i","why is this","why does this","why am i","still feeling",
+        "feel the same","feeling the same","again","right now","now what","help me",
+        "this feeling","that feeling","same feeling","same problem","tell me more",
+        "what about this","how to handle this","how to deal with this",
+        "how to control this","it happened again","it's happening again",
+        "it is happening again","what about now"
+    ]
+
+    looks_like_follow_up = any(
+        phrase in text
+        for phrase in follow_up_phrases
+    )
+
+    # If the current message is neither independently mental-health related nor a likely follow-up,
+    # reject it as outside scope.
+    if not looks_like_follow_up:
+        return False
+
+    # -----------------------------------------
+    # 4. Examine recent USER messages
+    # -----------------------------------------
+
+    recent_user_messages = []
+
+    if not isinstance(history, list):
+        history = []
+
+    for message in reversed(history):
+
+        if not isinstance(message, dict):
+            continue
+
+        if message.get("role") != "user":
+            continue
+
+        content = str(
+            message.get("content", "")
+        ).strip()
+
+        if content:
+            recent_user_messages.append(content)
+
+        # Only use the last two user messages.
+        # This prevents very old mental-health discussions from affecting an unrelated new topic.
+        if len(recent_user_messages) >= 2:
+            break
+
+    if not recent_user_messages:
+        return False
+
+    # -----------------------------------------
+    # 5. Determine whether the recent context was mental-health related
+    # -----------------------------------------
+
+    for previous_message in recent_user_messages:
+
+        # First use the trained classifier.
+        if is_mental_health_query(previous_message):
+            return True
+
+        # Then use the conservative fallback.
+        if secondary_mental_check(previous_message):
+            return True
+
+    # No evidence that this is a mental-health continuation.
+    return False
 
 # ==========================================
 # AI Response Function
@@ -1287,7 +1462,7 @@ def chat():
     if user_message == "":
         return jsonify({"reply": "Please enter a message."})
 
-    if (not is_mental_health_query(user_message) and not secondary_mental_check(user_message)):
+    if not is_mental_health_conversation(user_message, history):
         return jsonify({
             "main_emotion": "Not Applicable",
             "sub_emotion": "Not Applicable",
