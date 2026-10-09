@@ -9,7 +9,8 @@ pandas
 faiss-cpu
 onnx
 onnxruntime
-optimum-onnx[onnxruntime]
+optimum
+optimum-onnx
 PyMySQL
 SQLAlchemy
 joblib
